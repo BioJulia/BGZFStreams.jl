@@ -140,15 +140,30 @@ end
 function Base.read(stream::BGZFStream, ::Type{UInt8})
     if stream.mode != READ_MODE
         throw(ArgumentError("BGZFStream is not readable"))
-    elseif !has_buffered_data(stream)
-        read_block(stream)
-        if !has_buffered_data(stream)
-            throw(EOFError())
-        end
     end
+    ensure_buffered_data(stream)
     stream.offset += 1
     byte = stream.decompressed_block[block_offset(stream.offset)]
     return byte
+end
+
+if VERSION > v"0.5-"
+    function Base.unsafe_read(stream::BGZFStream, p::Ptr{UInt8}, n::UInt)
+        if stream.mode != READ_MODE
+            throw(ArgumentError("BGZFStream is not readable"))
+        end
+        needs::Int = n
+        while needs > 0
+            ensure_buffered_data(stream)
+            len = min(needs, n_buffered(stream))
+            ccall(
+                :memcpy,
+                Ptr{Void},
+                (Ptr{Void}, Ptr{Void}, Csize_t),
+                p, stream.decompressed_block, len)
+            needs -= len
+        end
+    end
 end
 
 function Base.write(stream::BGZFStream, byte::UInt8)
@@ -168,11 +183,28 @@ end
 
 # Return true iff the stream has buffered data in the decompressed block.
 function has_buffered_data(stream)
+    return n_buffered(stream) > 0
+end
+
+# Return the number of buffered data in the decompressed block.
+function n_buffered(stream)
     if stream.mode == READ_MODE
-        return block_offset(stream.offset) < stream.size
+        return Int(stream.size - block_offset(stream.offset))
     else
-        return block_offset(stream.offset) > 0
+        return Int(block_offset(stream.offset))
     end
+end
+
+# Ensure buffered data for reading; throw EOFError if failed.
+function ensure_buffered_data(stream)
+    @assert stream.mode == READ_MODE
+    if !has_buffered_data(stream)
+        read_block(stream)
+        if !has_buffered_data(stream)
+            throw(EOFError())
+        end
+    end
+    return
 end
 
 immutable BGZFDataError <: Exception

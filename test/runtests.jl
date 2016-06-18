@@ -55,7 +55,7 @@ for n in [0, 1, 100, 10000]
         close(stream)
 
         stream = BGZFStream(filename)
-        data′ = read(stream, n + 1)
+        data′ = read(stream)
         @test data′ == data
         close(stream)
     catch
