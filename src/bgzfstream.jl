@@ -99,7 +99,7 @@ function Base.close(stream::BGZFStream)
         write(stream.io, EOF_BLOCK)
     end
     close(stream.io)
-    finish(stream)
+    end_zstream(stream)
     stream.isopen = false
     return
 end
@@ -209,26 +209,6 @@ function read_block(stream)
     stream.size = BGZF_MAX_BLOCK_SIZE - zstream.avail_out
 
     reset_zstream(stream)
-end
-
-# Reset the zstream.
-function reset_zstream(stream)
-    if stream.mode == READ_MODE
-        ret = ccall(
-            (:inflateReset, Libz._zlib),
-            Cint,
-            (Ref{Libz.ZStream},),
-            stream.zstream)
-    else
-        ret = ccall(
-            (:deflateReset, Libz._zlib),
-            Cint,
-            (Ref{Libz.ZStream},),
-            stream.zstream)
-    end
-    if ret != Libz.Z_OK
-        error("failed to reset zlib stream.")
-    end
 end
 
 # Read a compressed BGZF block and return the size.
@@ -360,19 +340,42 @@ function is_eof_block(block)
     return true
 end
 
-function finish(stream)
+# Reset the zstream.
+function reset_zstream(stream)
+    if stream.mode == READ_MODE
+        ret = ccall(
+            (:inflateReset, Libz._zlib),
+            Cint,
+            (Ref{Libz.ZStream},),
+            stream.zstream)
+    else
+        ret = ccall(
+            (:deflateReset, Libz._zlib),
+            Cint,
+            (Ref{Libz.ZStream},),
+            stream.zstream)
+    end
+    if ret != Libz.Z_OK
+        error("failed to reset zlib stream")
+    end
+end
+
+# End the zstream.
+function end_zstream(stream)
     if stream.mode == READ_MODE
         ret = ccall(
             (:inflateEnd, Libz._zlib),
-            Cint, (Ref{Libz.ZStream},),
+            Cint,
+            (Ref{Libz.ZStream},),
             stream.zstream)
     else
         ret = ccall(
             (:deflateEnd, Libz._zlib),
-            Cint, (Ref{Libz.ZStream},),
+            Cint,
+            (Ref{Libz.ZStream},),
             stream.zstream)
     end
     if ret != Libz.Z_OK
-        error("failed to end zstream")
+        error("failed to end zlib stream")
     end
 end
