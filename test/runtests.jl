@@ -2,6 +2,9 @@ using BGZFStreams
 using Base.Test
 
 voff = VirtualOffset(0, 0)
+@test voff == VirtualOffset(0, 0)
+@test voff != VirtualOffset(0, 1)
+@test voff != VirtualOffset(1, 0)
 @test BGZFStreams.file_offset(voff) == 0
 @test BGZFStreams.block_offset(voff) == 0
 voff += 1

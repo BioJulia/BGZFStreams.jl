@@ -30,10 +30,6 @@ function VirtualOffset(file_offset::Integer, in_block_offset::Integer)
     return convert(VirtualOffset, (UInt64(file_offset) << 16) | UInt64(in_block_offset))
 end
 
-function Base.(:(==))(x::VirtualOffset, y::VirtualOffset)
-    return convert(UInt64, x) == convert(UInt64, y)
-end
-
 function Base.isless(x::VirtualOffset, y::VirtualOffset)
     return isless(convert(UInt64, x), convert(UInt64, y))
 end
