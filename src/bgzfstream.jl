@@ -1,9 +1,6 @@
 # BGZFStream
 # ==========
 
-"""
-IO stream for the BGZF compression format.
-"""
 type BGZFStream{T<:IO} <: IO
     # underlying IO stream
     io::T
@@ -37,6 +34,20 @@ const BGZF_MAX_BLOCK_SIZE = 64 * 1024
 # Write mode: deflate and write a BGZF file
 const READ_MODE  = 0x00
 const WRITE_MODE = 0x01
+
+"""
+    BGZFStream(io::IO[, mode::AbstractString="r"])
+    BGZFStream(filename::AbstractString[, mode::AbstractString="r"])
+
+Create an IO stream for the BGZF compression format.
+
+The first argument is either an `IO` object or a filename. If `mode` is `"r"`
+(read) the BGZF stream will be in read mode and decompress the underlying BGZF
+blocks while reading. In read mode, `BGZFStream` supports the `seek` operation
+using a virtual file offset (see `VirtualOffset`). If `mode` is `"w"` (write)
+or `"a"` (append) the BGZF stream will be in write mode and compress written
+data to BGZF blocks.
+"""
 
 function BGZFStream(io::IO, mode::AbstractString="r")
     if mode == "r"
