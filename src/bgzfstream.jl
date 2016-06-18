@@ -51,14 +51,16 @@ data to BGZF blocks.
 
 function BGZFStream(io::IO, mode::AbstractString="r")
     if mode == "r"
-        zstream = Libz.init_inflate_zstream(true)[]
+        zstream = Libz.init_inflate_zstream(true)
     elseif mode == "w" || mode == "a"
         if mode == "w"
             seekstart(io)
         end
-        zstream = Libz.init_deflate_stream(
-            true, 6, 8,
-            Libz.Z_DEFAULT_STRATEGY)[]
+        zstream = Libz.init_deflate_zstream(
+            true,
+            Libz.Z_DEFAULT_COMPRESSION,
+            8,  # default memory level
+            Libz.Z_DEFAULT_STRATEGY)
     else
         throw(ArgumentError("invalid mode: '", mode, "'"))
     end
