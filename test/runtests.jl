@@ -46,7 +46,7 @@ finally
     end
 end
 
-for n in [1, 100, 10000]
+for n in [0, 1, 100, 10000]
     try
         filename = tempname()
         stream = BGZFStream(filename, "w")
@@ -55,7 +55,7 @@ for n in [1, 100, 10000]
         close(stream)
 
         stream = BGZFStream(filename)
-        data′ = read(stream, 2n)
+        data′ = read(stream, n + 1)
         @test data′ == data
         close(stream)
     catch
