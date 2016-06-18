@@ -15,13 +15,13 @@ using BGZFStreams
 # The first argument is a filename or an IO object (e.g. IOStream).
 stream = BGZFStream("data.bgz")
 
-# BGZFStreams is a subtype of Base.IO and works like a usual IO object.
+# BGZFStream is a subtype of IO and works like a usual IO object.
 while !eof(stream)
     byte = read(stream, UInt8)
     # do something...
 end
 
-# BGZFStream is seekable with a VirtualOffset.
+# BGZFStream is also seekable with a VirtualOffset.
 seek(stream, VirtualOffset(0, 2))
 
 close(stream)
