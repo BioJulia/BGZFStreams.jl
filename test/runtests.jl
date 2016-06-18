@@ -1,5 +1,6 @@
 using BGZFStreams
 using Base.Test
+using Compat
 
 voff = VirtualOffset(0, 0)
 @test voff == VirtualOffset(0, 0)
@@ -54,7 +55,7 @@ for n in [1, 100, 10000]
         close(stream)
 
         stream = BGZFStream(filename)
-        data′ = readbytes(stream, 2n)
+        data′ = read(stream, 2n)
         @test data′ == data
         close(stream)
     catch

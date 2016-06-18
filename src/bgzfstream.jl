@@ -176,7 +176,7 @@ function has_buffered_data(stream)
 end
 
 immutable BGZFDataError <: Exception
-    message::ASCIIString
+    message::AbstractString
 end
 
 # Throw a BGZFDataError exception with the given error message.
