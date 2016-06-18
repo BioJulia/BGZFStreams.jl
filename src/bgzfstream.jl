@@ -78,6 +78,15 @@ function BGZFStream(filename::AbstractString, mode::AbstractString="r")
     return BGZFStream(open(filename, mode), mode)
 end
 
+"""
+    virtualoffset(stream::BGZFStream)
+
+Return the current virtual file offset of `stream`.
+"""
+function virtualoffset(stream::BGZFStream)
+    return stream.offset
+end
+
 function Base.isopen(stream::BGZFStream)
     return stream.isopen
 end

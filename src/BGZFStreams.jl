@@ -2,7 +2,8 @@ module BGZFStreams
 
 export
     VirtualOffset,
-    BGZFStream
+    BGZFStream,
+    virtualoffset
 
 using Libz
 

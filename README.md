@@ -24,5 +24,8 @@ end
 # BGZFStream is also seekable with a VirtualOffset.
 seek(stream, VirtualOffset(0, 2))
 
+# The current virtual file offset is available.
+virtualoffset(stream)
+
 close(stream)
 ```
