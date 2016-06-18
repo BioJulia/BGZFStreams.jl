@@ -6,7 +6,7 @@ type BGZFStream{T<:IO} <: IO
     io::T
 
     # zstream object
-    zstream::Base.RefValue{Libz.ZStream}
+    zstream::Libz.ZStream
 
     # space for the compressed block
     compressed_block::Vector{UInt8}
@@ -51,14 +51,14 @@ data to BGZF blocks.
 
 function BGZFStream(io::IO, mode::AbstractString="r")
     if mode == "r"
-        zstream = Libz.init_inflate_zstream(true)
+        zstream = Libz.init_inflate_zstream(true)[]
     elseif mode == "w" || mode == "a"
         if mode == "w"
             seekstart(io)
         end
         zstream = Libz.init_deflate_stream(
             true, 6, 8,
-            Libz.Z_DEFAULT_STRATEGY)
+            Libz.Z_DEFAULT_STRATEGY)[]
     else
         throw(ArgumentError("invalid mode: '", mode, "'"))
     end
@@ -99,8 +99,7 @@ function Base.close(stream::BGZFStream)
         write(stream.io, EOF_BLOCK)
     end
     close(stream.io)
-    # FIXME: This will cause a segmentation fault.
-    # finish(stream)
+    finish(stream)
     stream.isopen = false
     return
 end
@@ -188,7 +187,7 @@ function read_block(stream)
     file_offset = position(stream.io)
     bsize = read_bgzf_block(stream)
 
-    zstream = stream.zstream[]
+    zstream = stream.zstream
     zstream.next_in = pointer(stream.compressed_block)
     zstream.avail_in = bsize
     zstream.next_out = pointer(stream.decompressed_block)
@@ -197,8 +196,8 @@ function read_block(stream)
     ret = ccall(
         (:inflate, Libz._zlib),
         Cint,
-        (Ptr{Libz.ZStream}, Cint),
-        stream.zstream, Libz.Z_FINISH)
+        (Ref{Libz.ZStream}, Cint),
+        zstream, Libz.Z_FINISH)
     if ret != Libz.Z_STREAM_END
         if ret == Libz.Z_OK
             error("block size may exceed BGZF_MAX_BLOCK_SIZE")
@@ -214,7 +213,19 @@ end
 
 # Reset the zstream.
 function reset_zstream(stream)
-    ret = ccall((:inflateReset, Libz._zlib), Cint, (Ptr{Libz.ZStream},), stream.zstream)
+    if stream.mode == READ_MODE
+        ret = ccall(
+            (:inflateReset, Libz._zlib),
+            Cint,
+            (Ref{Libz.ZStream},),
+            stream.zstream)
+    else
+        ret = ccall(
+            (:deflateReset, Libz._zlib),
+            Cint,
+            (Ref{Libz.ZStream},),
+            stream.zstream)
+    end
     if ret != Libz.Z_OK
         error("failed to reset zlib stream.")
     end
@@ -292,7 +303,7 @@ function read_bgzf_block(stream)
 end
 
 function write_block(stream)
-    zstream = stream.zstream[]
+    zstream = stream.zstream
     zstream.next_in = pointer(stream.decompressed_block)
     zstream.avail_in = block_offset(stream.offset)
     zstream.next_out = pointer(stream.compressed_block, 9)
@@ -301,8 +312,8 @@ function write_block(stream)
     ret = ccall(
         (:deflate, Libz._zlib),
         Cint,
-        (Ptr{Libz.ZStream}, Cint),
-        stream.zstream, Libz.Z_FINISH)
+        (Ref{Libz.ZStream}, Cint),
+        zstream, Libz.Z_FINISH)
     if ret != Libz.Z_STREAM_END
         if ret == Libz.Z_OK
             error("block size may exceed BGZF_MAX_BLOCK_SIZE")
@@ -353,18 +364,15 @@ function finish(stream)
     if stream.mode == READ_MODE
         ret = ccall(
             (:inflateEnd, Libz._zlib),
-            Cint, (Ptr{Libz.ZStream},),
+            Cint, (Ref{Libz.ZStream},),
             stream.zstream)
     else
         ret = ccall(
             (:deflateEnd, Libz._zlib),
-            Cint, (Ptr{Libz.ZStream},),
+            Cint, (Ref{Libz.ZStream},),
             stream.zstream)
     end
-
     if ret != Libz.Z_OK
         error("failed to end zstream")
     end
-
-    return
 end
