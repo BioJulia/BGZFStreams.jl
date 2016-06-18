@@ -2,9 +2,9 @@
 
 [![Build Status](https://travis-ci.org/bicycle1885/BGZFStreams.jl.svg?branch=master)](https://travis-ci.org/bicycle1885/BGZFStreams.jl)
 
-BGZF is compression format that supports random access using *virtual file offsets*.
+BGZF is a compression format that supports random access using *virtual file offsets*.
 
-See the SAM/BAM file format specs for the details: <https://samtools.github.io/hts-specs/SAMv1.pdf>.
+See the SAM/BAM file format specs for the defails of BGZF: <https://samtools.github.io/hts-specs/SAMv1.pdf>.
 
 
 ## Synopsis
