@@ -36,6 +36,7 @@ try
     @test write(stream, 'b') === 1
     @test write(stream, 'a') === 1
     @test write(stream, 'r') === 1
+    @test write(stream, "baz") === 3
     @test eof(stream)
     close(stream)
 catch

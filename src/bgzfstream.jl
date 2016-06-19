@@ -139,7 +139,7 @@ end
 
 function Base.read(stream::BGZFStream, ::Type{UInt8})
     if stream.mode != READ_MODE
-        throw(ArgumentError("BGZFStream is not readable"))
+        throw(ArgumentError("stream is not readable"))
     end
     ensure_buffered_data(stream)
     stream.offset += 1
@@ -147,34 +147,54 @@ function Base.read(stream::BGZFStream, ::Type{UInt8})
     return byte
 end
 
-if VERSION > v"0.5-"
-    function Base.unsafe_read(stream::BGZFStream, p::Ptr{UInt8}, n::UInt)
-        if stream.mode != READ_MODE
-            throw(ArgumentError("BGZFStream is not readable"))
-        end
-        needs::Int = n
-        while needs > 0
-            ensure_buffered_data(stream)
-            len = min(needs, n_buffered(stream))
-            ccall(
-                :memcpy,
-                Ptr{Void},
-                (Ptr{Void}, Ptr{Void}, Csize_t),
-                p, stream.decompressed_block, len)
-            needs -= len
-        end
-    end
-end
-
 function Base.write(stream::BGZFStream, byte::UInt8)
     if stream.mode != WRITE_MODE
-        throw(ArgumentError("BGZFStream is not writable"))
+        throw(ArgumentError("stream is not writable"))
     elseif block_offset(stream.offset) == stream.size
         write_block(stream)
     end
     stream.offset += 1
     stream.decompressed_block[block_offset(stream.offset)] = byte
     return 1
+end
+
+if VERSION > v"0.5-"
+    function Base.unsafe_read(stream::BGZFStream, p::Ptr{UInt8}, n::UInt)
+        if stream.mode != READ_MODE
+            throw(ArgumentError("stream is not readable"))
+        end
+        need::Int = n
+        while need > 0
+            ensure_buffered_data(stream)
+            len = min(need, n_buffered(stream))
+            ccall(
+                :memcpy,
+                Ptr{Void},
+                (Ptr{Void}, Ptr{Void}, Csize_t),
+                p, stream.decompressed_block, len)
+            need -= len
+            stream.offset += len
+        end
+    end
+
+    function Base.unsafe_write(stream::BGZFStream, p::Ptr{UInt8}, n::UInt)
+        if stream.mode != WRITE_MODE
+            throw(ArgumentError("stream is not writable"))
+        end
+        need::Int = n
+        while need > 0
+            ensure_buffer_room(stream)
+            len = min(need, stream.size - block_offset(stream.offset))
+            ccall(
+                :memcpy,
+                Ptr{Void},
+                (Ptr{Void}, Ptr{Void}, Csize_t),
+                stream.decompressed_block, p, len)
+            need -= len
+            stream.offset += len
+        end
+        return Int(n)
+    end
 end
 
 
@@ -204,6 +224,16 @@ function ensure_buffered_data(stream)
             throw(EOFError())
         end
     end
+    return
+end
+
+# Ensure room in the buffer.
+function ensure_buffer_room(stream)
+    @assert stream.mode == WRITE_MODE
+    if block_offset(stream.offset) == stream.size
+        write_block(stream)
+    end
+    @assert block_offset(stream.offset) < stream.size
     return
 end
 
@@ -272,12 +302,12 @@ function read_bgzf_block(stream)
     # +---+---+=================================+
     # | XLEN  |...XLEN bytes of "extra field"...| (more-->)
     # +---+---+=================================+
-    n = readbytes!(source, sub(block, 11:endof(block)), 2)
+    n = readbytes!(source, view(block, 11:endof(block)), 2)
     if n != 2
         bgzferror()
     end
     xlen = UInt16(block[11]) | UInt16(block[12]) << 8
-    n = readbytes!(source, sub(block, 13:endof(block)), xlen)
+    n = readbytes!(source, view(block, 13:endof(block)), xlen)
     if n != xlen
         bgzferror()
     end
@@ -303,8 +333,7 @@ function read_bgzf_block(stream)
     # +=======================+---+---+---+---+---+---+---+---+
     # |...compressed blocks...|     CRC32     |     ISIZE     |
     # +=======================+---+---+---+---+---+---+---+---+
-    #readbytes!(source, sub(block, (13 + xlen):endof(block)), bsize - (12 + xlen))
-    n = readbytes!(source, sub(block, (13 + xlen):endof(block)), bsize - 1 - xlen - 19 + 8)
+    n = readbytes!(source, view(block, (13 + xlen):endof(block)), bsize - 1 - xlen - 19 + 8)
     if n != bsize - 1 - xlen - 19 + 8
         bgzferror()
     end
@@ -338,7 +367,7 @@ function write_block(stream)
 
     blocksize = (BGZF_MAX_BLOCK_SIZE - 8) - zstream.avail_out + 8
     fix_header!(stream.compressed_block, blocksize)
-    write(stream.io, sub(stream.compressed_block, 1:blocksize))
+    write(stream.io, view(stream.compressed_block, 1:blocksize))
     stream.offset = VirtualOffset(position(stream.io), 0)
 
     reset_zstream(stream)
