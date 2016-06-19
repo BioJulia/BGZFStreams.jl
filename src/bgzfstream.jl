@@ -1,6 +1,26 @@
 # BGZFStream
 # ==========
 
+# Read mode (.mode = READ_MODE)
+# -----------------------------
+#          compressed block          decompressed block
+#          +---------------+         +---------------+
+# .io ---> |xxxxxxx        | ------> |xxxxxxxxxxx    | --->
+#     read +---------------+ inflate +---------------+ read
+#                                    |------>| block_offset(.offset) ∈ [0, 16K)
+#                                    |<-------->| .size ∈ [0, 16K]
+#
+# Write mode (.mode = WRITE_MODE)
+# -------------------------------
+#          compressed block          decompressed block
+#          +---------------+         +---------------+
+# .io <--- |xxxxxxx        | <------ |xxxxxxxx       | <---
+#    write +---------------+ deflate +---------------+ write
+#                                    |------>| block_offset(.offset) ∈ [0, 16K)
+#                                    |<------------->| .size = 16K
+# - xxx: used data
+# - 16K: 16384 (= 16 * 1024)
+
 type BGZFStream{T<:IO} <: IO
     # underlying IO stream
     io::T
