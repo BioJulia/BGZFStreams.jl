@@ -7,8 +7,8 @@
 #          +---------------+         +---------------+
 # .io ---> |xxxxxxx        | ------> |xxxxxxxxxxx    | --->
 #     read +---------------+ inflate +---------------+ read
-#                                    |------>| block_offset(.offset) ∈ [0, 16K)
-#                                    |<-------->| .size ∈ [0, 16K]
+#                                    |------>| block_offset(.offset) ∈ [0, 64K)
+#                                    |<-------->| .size ∈ [0, 64K]
 #
 # Write mode (.mode = WRITE_MODE)
 # -------------------------------
@@ -16,10 +16,10 @@
 #          +---------------+         +---------------+
 # .io <--- |xxxxxxx        | <------ |xxxxxxxx       | <---
 #    write +---------------+ deflate +---------------+ write
-#                                    |------>| block_offset(.offset) ∈ [0, 16K)
-#                                    |<------------->| .size = 16K
+#                                    |------>| block_offset(.offset) ∈ [0, 64K)
+#                                    |<------------->| .size = 64K - 256
 # - xxx: used data
-# - 16K: 16384 (= 16 * 1024)
+# - 64K: 65536 (= BGZF_MAX_BLOCK_SIZE = 64 * 1024)
 
 type BGZFStream{T<:IO} <: IO
     # underlying IO stream
@@ -34,21 +34,26 @@ type BGZFStream{T<:IO} <: IO
     # space for the decompressed block
     decompressed_block::Vector{UInt8}
 
-    # virtual offset
+    # virtual file offset
     offset::VirtualOffset
 
     # read/write mode
     mode::UInt8
 
     # number of available bytes in the decompressed block
-    size::Int
+    size::UInt
 
     # whether stream is open
     isopen::Bool
 end
 
 # BGZF blocks are no larger than 64 KiB before and after compression.
-const BGZF_MAX_BLOCK_SIZE = 64 * 1024
+const BGZF_MAX_BLOCK_SIZE = UInt(64 * 1024)
+
+# BGZF_MAX_BLOCK_SIZE minus "margin for safety"
+# NOTE: Data block will become slightly larger after deflation when bytes are
+# randomly distributed.
+const BGZF_SAFE_BLOCK_SIZE = UInt(BGZF_MAX_BLOCK_SIZE - 256)
 
 # Read mode:  inflate and read a BGZF file
 # Write mode: deflate and write a BGZF file
@@ -92,7 +97,7 @@ function BGZFStream(io::IO, mode::AbstractString="r")
         Vector{UInt8}(BGZF_MAX_BLOCK_SIZE),
         VirtualOffset(position(io), 0),
         mode == "r" ? READ_MODE : WRITE_MODE,
-        mode == "r" ? 0 : BGZF_MAX_BLOCK_SIZE,
+        mode == "r" ? UInt(0) : BGZF_SAFE_BLOCK_SIZE,
         true)
 end
 
@@ -115,7 +120,7 @@ end
 
 function Base.close(stream::BGZFStream)
     if stream.mode == WRITE_MODE
-        if has_buffered_data(stream)
+        if block_offset(stream.offset) > 0
             write_block(stream)
         end
         write(stream.io, EOF_BLOCK)
@@ -135,13 +140,13 @@ end
 
 function Base.eof(stream::BGZFStream)
     if stream.mode == READ_MODE
-        if has_buffered_data(stream)
+        if block_offset(stream.offset) < stream.size
             return false
         elseif eof(stream.io)
             return true
         end
         read_block(stream)
-        return !has_buffered_data(stream)
+        return block_offset(stream.offset) == stream.size
     else
         return true
     end
@@ -161,20 +166,29 @@ function Base.read(stream::BGZFStream, ::Type{UInt8})
     if stream.mode != READ_MODE
         throw(ArgumentError("stream is not readable"))
     end
-    ensure_buffered_data(stream)
-    stream.offset += 1
-    byte = stream.decompressed_block[block_offset(stream.offset)]
+    ensure_buffer_room(stream)
+    x = block_offset(stream.offset) + 1
+    byte = stream.decompressed_block[x]
+    if x == stream.size
+        read_block(stream)
+    else
+        stream.offset += 1
+    end
     return byte
 end
 
 function Base.write(stream::BGZFStream, byte::UInt8)
     if stream.mode != WRITE_MODE
         throw(ArgumentError("stream is not writable"))
-    elseif block_offset(stream.offset) == stream.size
-        write_block(stream)
     end
-    stream.offset += 1
-    stream.decompressed_block[block_offset(stream.offset)] = byte
+    ensure_buffer_room(stream)
+    x = block_offset(stream.offset) + 1
+    stream.decompressed_block[x] = byte
+    if x == stream.size
+        write_block(stream)
+    else
+        stream.offset += 1
+    end
     return 1
 end
 
@@ -183,17 +197,18 @@ if VERSION > v"0.5-"
         if stream.mode != READ_MODE
             throw(ArgumentError("stream is not readable"))
         end
-        need::Int = n
-        while need > 0
-            ensure_buffered_data(stream)
-            len = min(need, n_buffered(stream))
-            ccall(
-                :memcpy,
-                Ptr{Void},
-                (Ptr{Void}, Ptr{Void}, Csize_t),
-                p, stream.decompressed_block, len)
-            need -= len
-            stream.offset += len
+        p_end = p + n
+        while p < p_end
+            ensure_buffer_room(stream)
+            buffered = stream.size - block_offset(stream.offset)
+            len = min(p_end - p, buffered)
+            memcpy(p, stream.decompressed_block, len)
+            if len == buffered
+                read_block(stream)
+            else
+                stream.offset += len
+            end
+            p += len
         end
     end
 
@@ -201,17 +216,18 @@ if VERSION > v"0.5-"
         if stream.mode != WRITE_MODE
             throw(ArgumentError("stream is not writable"))
         end
-        need::Int = n
-        while need > 0
+        p_end = p + n
+        while p < p_end
             ensure_buffer_room(stream)
-            len = min(need, stream.size - block_offset(stream.offset))
-            ccall(
-                :memcpy,
-                Ptr{Void},
-                (Ptr{Void}, Ptr{Void}, Csize_t),
-                stream.decompressed_block, p, len)
-            need -= len
-            stream.offset += len
+            buffered = stream.size - block_offset(stream.offset)
+            len = min(p_end - p, buffered)
+            memcpy(stream.decompressed_block, p, len)
+            if len == buffered
+                write_block(stream)
+            else
+                stream.offset += len
+            end
+            p += len
         end
         return Int(n)
     end
@@ -221,40 +237,42 @@ end
 # Internal functions
 # ------------------
 
-# Return true iff the stream has buffered data in the decompressed block.
-function has_buffered_data(stream)
-    return n_buffered(stream) > 0
-end
-
-# Return the number of buffered data in the decompressed block.
-function n_buffered(stream)
-    if stream.mode == READ_MODE
-        return Int(stream.size - block_offset(stream.offset))
-    else
-        return Int(block_offset(stream.offset))
+# Ensure buffered data for reading/writing; throw an exception if it fails.
+function ensure_buffer_room(stream)
+    @assert block_offset(stream.offset) ≤ stream.size
+    if block_offset(stream.offset) < stream.size
+        return
     end
-end
-
-# Ensure buffered data for reading; throw EOFError if failed.
-function ensure_buffered_data(stream)
-    @assert stream.mode == READ_MODE
-    if !has_buffered_data(stream)
+    if stream.mode == READ_MODE
         read_block(stream)
-        if !has_buffered_data(stream)
+        if block_offset(stream.offset) == stream.size
+            # failed to ensure buffered data for reading
             throw(EOFError())
+        end
+    else
+        write_block(stream)
+        if block_offset(stream.offset) == stream.size
+            error("failed to write data with unknown reason")
         end
     end
     return
 end
 
-# Ensure room in the buffer.
-function ensure_buffer_room(stream)
-    @assert stream.mode == WRITE_MODE
-    if block_offset(stream.offset) == stream.size
-        write_block(stream)
-    end
-    @assert block_offset(stream.offset) < stream.size
-    return
+# A wrapper of memcpy.
+function memcpy(dst::Ptr, src::Ptr, len)
+    ccall(
+        :memcpy,
+        Ptr{Void},
+        (Ptr{Void}, Ptr{Void}, Csize_t),
+        dst, src, len)
+end
+
+function memcpy(dst::Ptr, src::Array, len)
+    memcpy(dst, pointer(src), len)
+end
+
+function memcpy(dst::Array, src::Ptr, len)
+    memcpy(pointer(dst), src, len)
 end
 
 immutable BGZFDataError <: Exception
@@ -266,11 +284,17 @@ function bgzferror(message::AbstractString="malformed BGZF data")
     throw(BGZFDataError(message))
 end
 
-# Read a compressed block and inflate it.
+# Read and inflate a compressed block.
 function read_block(stream)
     file_offset = position(stream.io)
-    bsize = read_bgzf_block(stream)
 
+    if eof(stream.io)
+        stream.offset = VirtualOffset(file_offset, 0)
+        stream.size = 0
+        return
+    end
+
+    bsize = read_bgzf_block(stream)
     zstream = stream.zstream
     zstream.next_in = pointer(stream.compressed_block)
     zstream.avail_in = bsize
@@ -387,7 +411,7 @@ function write_block(stream)
 
     blocksize = (BGZF_MAX_BLOCK_SIZE - 8) - zstream.avail_out + 8
     fix_header!(stream.compressed_block, blocksize)
-    write(stream.io, view(stream.compressed_block, 1:blocksize))
+    write(stream.io, view(stream.compressed_block, 1:Int(blocksize)))
     stream.offset = VirtualOffset(position(stream.io), 0)
 
     reset_zstream(stream)
