@@ -8,7 +8,7 @@
 # .io ---> |xxxxxxx        | ------> |xxxxxxxxxxx    | --->
 #     read +---------------+ inflate +---------------+ read
 #                                    |------>| block_offset(.offset) ∈ [0, 64K)
-#                                    |<-------->| .size ∈ [0, 64K]
+#                                    |<-------->| .size ∈ [0, 64K)
 #
 # Write mode (.mode = WRITE_MODE)
 # -------------------------------
@@ -93,7 +93,7 @@ function BGZFStream(io::IO, mode::AbstractString="r")
         throw(ArgumentError("invalid mode: '", mode, "'"))
     end
 
-    return BGZFStream(
+    stream = BGZFStream(
         io,
         zstream,
         Vector{UInt8}(BGZF_MAX_BLOCK_SIZE),
@@ -103,6 +103,12 @@ function BGZFStream(io::IO, mode::AbstractString="r")
         mode == "r" ? UInt(0) : BGZF_SAFE_BLOCK_SIZE,
         true,
         io -> close(io))
+
+    if stream.mode == READ_MODE
+        ensure_buffered_data(stream)
+    end
+
+    return stream
 end
 
 function BGZFStream(filename::AbstractString, mode::AbstractString="r")
@@ -170,13 +176,13 @@ function Base.read(stream::BGZFStream, ::Type{UInt8})
     if stream.mode != READ_MODE
         throw(ArgumentError("stream is not readable"))
     end
-    ensure_buffer_room(stream)
-    x = block_offset(stream.offset) + 1
+    if block_offset(stream.offset) == stream.size
+        throw(EOFError())
+    end
+    x = block_offset(stream.offset += 1)
     byte = stream.decompressed_block[x]
     if x == stream.size
-        read_block(stream)
-    else
-        stream.offset += 1
+        ensure_buffered_data(stream)
     end
     return byte
 end
@@ -200,14 +206,13 @@ if VERSION > v"0.5-"
         end
         p_end = p + n
         while p < p_end
-            ensure_buffer_room(stream)
-            buffered = stream.size - block_offset(stream.offset)
-            len = min(p_end - p, buffered)
-            memcpy(p, stream.decompressed_block, len)
-            if len == buffered
-                read_block(stream)
-            else
-                stream.offset += len
+            x = block_offset(stream.offset)
+            len = min(p_end - p, stream.size - x)
+            src = pointer(stream.decompressed_block, x + 1)
+            memcpy(p, src, len)
+            x = block_offset(stream.offset += len)
+            if x == stream.size
+                ensure_buffered_data(stream)
             end
             p += len
         end
@@ -237,25 +242,16 @@ end
 # Internal functions
 # ------------------
 
-# Ensure buffered data for reading/writing; throw an exception if it fails.
-function ensure_buffer_room(stream)
-    @assert block_offset(stream.offset) ≤ stream.size
-    if block_offset(stream.offset) < stream.size
-        return
-    end
-    if stream.mode == READ_MODE
+# Ensure buffered data for reading.
+function ensure_buffered_data(stream)
+    @assert stream.mode == READ_MODE
+    while block_offset(stream.offset) == stream.size
+        if eof(stream.io)
+            return false
+        end
         read_block(stream)
-        if block_offset(stream.offset) == stream.size
-            # failed to ensure buffered data for reading
-            throw(EOFError())
-        end
-    else
-        write_block(stream)
-        if block_offset(stream.offset) == stream.size
-            error("failed to write data with unknown reason")
-        end
     end
-    return
+    return true
 end
 
 # A wrapper of memcpy.
@@ -265,14 +261,6 @@ function memcpy(dst::Ptr, src::Ptr, len)
         Ptr{Void},
         (Ptr{Void}, Ptr{Void}, Csize_t),
         dst, src, len)
-end
-
-function memcpy(dst::Ptr, src::Array, len)
-    memcpy(dst, pointer(src), len)
-end
-
-function memcpy(dst::Array, src::Ptr, len)
-    memcpy(pointer(dst), src, len)
 end
 
 immutable BGZFDataError <: Exception
@@ -317,6 +305,9 @@ function read_block(stream)
     end
     stream.offset = VirtualOffset(file_offset, 0)
     stream.size = BGZF_MAX_BLOCK_SIZE - zstream.avail_out
+
+    # the decompresed block size must be strictly smaller than 64KiB
+    @assert stream.size < BGZF_MAX_BLOCK_SIZE
 
     reset_zstream(stream)
 end
