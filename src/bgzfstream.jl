@@ -185,13 +185,10 @@ function Base.write(stream::BGZFStream, byte::UInt8)
     if stream.mode != WRITE_MODE
         throw(ArgumentError("stream is not writable"))
     end
-    ensure_buffer_room(stream)
-    x = block_offset(stream.offset) + 1
+    x = block_offset(stream.offset += 1)
     stream.decompressed_block[x] = byte
     if x == stream.size
         write_block(stream)
-    else
-        stream.offset += 1
     end
     return 1
 end
@@ -222,14 +219,13 @@ if VERSION > v"0.5-"
         end
         p_end = p + n
         while p < p_end
-            ensure_buffer_room(stream)
-            buffered = stream.size - block_offset(stream.offset)
-            len = min(p_end - p, buffered)
-            memcpy(stream.decompressed_block, p, len)
-            if len == buffered
+            x = block_offset(stream.offset)
+            len = min(p_end - p, stream.size - x)
+            dst = pointer(stream.decompressed_block, x + 1)
+            memcpy(dst, p, len)
+            x = block_offset(stream.offset += len)
+            if x == stream.size
                 write_block(stream)
-            else
-                stream.offset += len
             end
             p += len
         end
@@ -290,6 +286,8 @@ end
 
 # Read and inflate a compressed block.
 function read_block(stream)
+    @assert stream.mode == READ_MODE
+
     file_offset = position(stream.io)
 
     if eof(stream.io)
@@ -394,6 +392,7 @@ function read_bgzf_block(stream)
 end
 
 function write_block(stream)
+    @assert stream.mode == WRITE_MODE
     zstream = stream.zstream
     zstream.next_in = pointer(stream.decompressed_block)
     zstream.avail_in = block_offset(stream.offset)

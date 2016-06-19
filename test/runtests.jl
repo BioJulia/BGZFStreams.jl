@@ -54,7 +54,7 @@ close(stream)
 @test !isopen(buffer)
 
 # Round trip
-for n in [0, 1, 100, 10000]
+for n in [0, 1, 2, 5, 10, 50, 100, 10_000, 100_000, 1_000_000]
     buffer = IOBuffer()
     stream = BGZFStream(buffer, "w")
     # HACK: do not close the buffer after the stream is closed
