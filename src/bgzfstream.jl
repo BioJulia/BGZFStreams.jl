@@ -45,6 +45,9 @@ type BGZFStream{T<:IO} <: IO
 
     # whether stream is open
     isopen::Bool
+
+    # callback function called when closing the stream
+    onclose::Function
 end
 
 # BGZF blocks are no larger than 64 KiB before and after compression.
@@ -98,7 +101,8 @@ function BGZFStream(io::IO, mode::AbstractString="r")
         VirtualOffset(position(io), 0),
         mode == "r" ? READ_MODE : WRITE_MODE,
         mode == "r" ? UInt(0) : BGZF_SAFE_BLOCK_SIZE,
-        true)
+        true,
+        io -> close(io))
 end
 
 function BGZFStream(filename::AbstractString, mode::AbstractString="r")
@@ -125,9 +129,9 @@ function Base.close(stream::BGZFStream)
         end
         write(stream.io, EOF_BLOCK)
     end
-    close(stream.io)
     end_zstream(stream)
     stream.isopen = false
+    stream.onclose(stream.io)
     return
 end
 

@@ -47,6 +47,12 @@ finally
     end
 end
 
+buffer = IOBuffer()
+stream = BGZFStream(buffer, "w")
+write(stream, "foo")
+close(stream)
+@test !isopen(buffer)
+
 for n in [0, 1, 100, 10000]
     try
         filename = tempname()
