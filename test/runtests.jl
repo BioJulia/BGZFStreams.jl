@@ -53,23 +53,19 @@ write(stream, "foo")
 close(stream)
 @test !isopen(buffer)
 
+# Round trip
 for n in [0, 1, 100, 10000]
-    try
-        filename = tempname()
-        stream = BGZFStream(filename, "w")
-        data = rand(0x00:0xf0, n)
-        write(stream, data)
-        close(stream)
+    buffer = IOBuffer()
+    stream = BGZFStream(buffer, "w")
+    # HACK: do not close the buffer after the stream is closed
+    stream.onclose = io -> nothing
+    data = rand(0x00:0xf0, n)
+    write(stream, data)
+    close(stream)
 
-        stream = BGZFStream(filename)
-        data′ = read(stream)
-        @test data′ == data
-        close(stream)
-    catch
-        rethrow()
-    finally
-        if isfile(filename)
-            rm(filename)
-        end
-    end
+    seekstart(buffer)
+    stream = BGZFStream(buffer)
+    data′ = read(stream)
+    @test data′ == data
+    close(stream)
 end
