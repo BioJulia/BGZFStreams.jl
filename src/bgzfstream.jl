@@ -17,7 +17,7 @@
 # .io <--- |xxxxxxx        | <------ |xxxxxxxx       | <---
 #    write +---------------+ deflate +---------------+ write
 #                                    |------>| block_offset(.offset) ∈ [0, 64K)
-#                                    |<------------->| .size = 64K - 256
+#                                    |<------------>| .size = 64K - 256
 # - xxx: used data
 # - 64K: 65536 (= BGZF_MAX_BLOCK_SIZE = 64 * 1024)
 
@@ -112,6 +112,9 @@ function BGZFStream(io::IO, mode::AbstractString="r")
 end
 
 function BGZFStream(filename::AbstractString, mode::AbstractString="r")
+    if mode ∉ ("r", "w", "a")
+        throw(ArgumentError("invalid mode: '", mode, "'"))
+    end
     return BGZFStream(open(filename, mode), mode)
 end
 
@@ -255,7 +258,7 @@ function ensure_buffered_data(stream)
 end
 
 # A wrapper of memcpy.
-function memcpy(dst::Ptr, src::Ptr, len)
+function memcpy(dst, src, len)
     ccall(
         :memcpy,
         Ptr{Void},
@@ -384,6 +387,7 @@ end
 
 function write_block(stream)
     @assert stream.mode == WRITE_MODE
+
     zstream = stream.zstream
     zstream.next_in = pointer(stream.decompressed_block)
     zstream.avail_in = block_offset(stream.offset)
