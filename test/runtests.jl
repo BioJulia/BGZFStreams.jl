@@ -30,6 +30,21 @@ seek(stream, VirtualOffset(0, 1))
 @test read(stream, UInt8) === UInt8('r')
 close(stream)
 
+# Empty data.
+empty_block = copy(BGZFStreams.EOF_BLOCK)
+stream = BGZFStream(IOBuffer(empty_block))
+@test_throws EOFError read(stream, UInt8)
+@test_throws EOFError read(stream, UInt8)
+stream = BGZFStream(IOBuffer(vcat(empty_block, empty_block)))
+@test_throws EOFError read(stream, UInt8)
+@test_throws EOFError read(stream, UInt8)
+stream = BGZFStream(IOBuffer(empty_block))
+@test isempty(read(stream))
+@test isempty(read(stream))
+stream = BGZFStream(IOBuffer(vcat(empty_block, empty_block)))
+@test isempty(read(stream))
+@test isempty(read(stream))
+
 filename = tempname()
 try
     stream = BGZFStream(filename, "w")
