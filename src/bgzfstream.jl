@@ -21,13 +21,7 @@
 # - xxx: used data
 # - 64K: 65536 (= BGZF_MAX_BLOCK_SIZE = 64 * 1024)
 
-type BGZFStream{T<:IO} <: IO
-    # underlying IO stream
-    io::T
-
-    # zstream object
-    zstream::Libz.ZStream
-
+type Block
     # space for the compressed block
     compressed_block::Vector{UInt8}
 
@@ -37,11 +31,51 @@ type BGZFStream{T<:IO} <: IO
     # virtual file offset
     offset::VirtualOffset
 
+    # number of available bytes in the decompressed block
+    size::UInt
+
+    # zstream object
+    zstream::Libz.ZStream
+end
+
+function Block(mode)
+    compressed_block = Vector{UInt8}(BGZF_MAX_BLOCK_SIZE)
+    decompressed_block = Vector{UInt8}(BGZF_MAX_BLOCK_SIZE)
+    offset = VirtualOffset(0, 0)
+
+    if mode == READ_MODE
+        zstream = Libz.init_inflate_zstream(true)
+        size = 0
+    else
+        zstream = Libz.init_deflate_zstream(
+            true,
+            Libz.Z_DEFAULT_COMPRESSION,
+            8,  # default memory level
+            Libz.Z_DEFAULT_STRATEGY)
+        size = BGZF_SAFE_BLOCK_SIZE
+    end
+
+    return Block(
+        compressed_block,
+        decompressed_block,
+        offset,
+        size,
+        zstream)
+end
+
+# Stream type for the BGZF compression format.
+type BGZFStream{T<:IO} <: IO
+    # underlying IO stream
+    io::T
+
     # read/write mode
     mode::UInt8
 
-    # number of available bytes in the decompressed block
-    size::UInt
+    # compressed & decompressed blocks with metadata and zstream
+    blocks::Vector{Block}
+
+    # current block index
+    block_index::Int
 
     # whether stream is open
     isopen::Bool
@@ -76,33 +110,20 @@ using a virtual file offset (see `VirtualOffset`). If `mode` is `"w"` (write)
 or `"a"` (append) the BGZF stream will be in write mode and compress written
 data to BGZF blocks.
 """
-
 function BGZFStream(io::IO, mode::AbstractString="r")
-    if mode == "r"
-        zstream = Libz.init_inflate_zstream(true)
-    elseif mode == "w" || mode == "a"
-        if mode == "w"
-            seekstart(io)
-        end
-        zstream = Libz.init_deflate_zstream(
-            true,
-            Libz.Z_DEFAULT_COMPRESSION,
-            8,  # default memory level
-            Libz.Z_DEFAULT_STRATEGY)
-    else
-        throw(ArgumentError("invalid mode: '", mode, "'"))
+    if mode ∉ ("r", "w", "a")
+        throw(ArgumentError("invalid mode: \"", mode, "\""))
     end
 
-    stream = BGZFStream(
-        io,
-        zstream,
-        Vector{UInt8}(BGZF_MAX_BLOCK_SIZE),
-        Vector{UInt8}(BGZF_MAX_BLOCK_SIZE),
-        VirtualOffset(position(io), 0),
-        mode == "r" ? READ_MODE : WRITE_MODE,
-        mode == "r" ? UInt(0) : BGZF_SAFE_BLOCK_SIZE,
-        true,
-        io -> close(io))
+    # the number of parallel workers
+    mode′ = mode == "r" ? READ_MODE : WRITE_MODE
+    if mode′ == READ_MODE
+        blocks = [Block(mode′) for _ in nthreads()]
+    else
+        # Write mode is not (yet?) multi-threaded.
+        blocks = [Block(mode′)]
+    end
+    stream = BGZFStream(io, mode′, blocks, 1, true, io -> close(io))
 
     if stream.mode == READ_MODE
         ensure_buffered_data(stream)
@@ -132,7 +153,6 @@ function Base.show(io::IO, stream::BGZFStream)
         summary(stream),
         "(<",
         "mode=", stream.mode == READ_MODE ? "\"read\", " : "\"write\", ",
-        "offset=", stream.offset,
         ">)")
 end
 
@@ -142,12 +162,14 @@ end
 
 function Base.close(stream::BGZFStream)
     if stream.mode == WRITE_MODE
-        if block_offset(stream.offset) > 0
-            write_block(stream)
+        if block_offset(stream.blocks[1].offset) > 0
+            write_blocks!(stream)
         end
         write(stream.io, EOF_BLOCK)
     end
-    end_zstream(stream)
+    for block in stream.blocks
+        end_zstream(block.zstream, stream.mode)
+    end
     stream.isopen = false
     stream.onclose(stream.io)
     return
@@ -162,13 +184,7 @@ end
 
 function Base.eof(stream::BGZFStream)
     if stream.mode == READ_MODE
-        if block_offset(stream.offset) < stream.size
-            return false
-        elseif eof(stream.io)
-            return true
-        end
-        read_block(stream)
-        return block_offset(stream.offset) == stream.size
+        return ensure_buffered_data(stream) == 0
     else
         return true
     end
@@ -190,12 +206,14 @@ function Base.read(stream::BGZFStream, ::Type{UInt8})
     elseif stream.mode != READ_MODE
         throw(ArgumentError("stream is not readable"))
     end
-    if block_offset(stream.offset) == stream.size
+    i = ensure_buffered_data(stream)
+    if i == 0
         throw(EOFError())
     end
-    x = block_offset(stream.offset += 1)
-    byte = stream.decompressed_block[x]
-    if x == stream.size
+    block = stream.blocks[i]
+    x = block_offset(block.offset += 1)
+    byte = block.decompressed_block[x]
+    if x == block.size
         ensure_buffered_data(stream)
     end
     return byte
@@ -207,10 +225,11 @@ function Base.write(stream::BGZFStream, byte::UInt8)
     elseif stream.mode != WRITE_MODE
         throw(ArgumentError("stream is not writable"))
     end
-    x = block_offset(stream.offset += 1)
-    stream.decompressed_block[x] = byte
-    if x == stream.size
-        write_block(stream)
+    block = stream.blocks[1]
+    x = block_offset(block.offset += 1)
+    block.decompressed_block[x] = byte
+    if x == block.size
+        ensure_buffer_room(stream)
     end
     return 1
 end
@@ -224,14 +243,17 @@ if VERSION > v"0.5-"
         end
         p_end = p + n
         while p < p_end
-            x = block_offset(stream.offset)
-            len = min(p_end - p, stream.size - x)
-            src = pointer(stream.decompressed_block, x + 1)
-            memcpy(p, src, len)
-            x = block_offset(stream.offset += len)
-            if x == stream.size
-                ensure_buffered_data(stream)
+            i = ensure_buffered_data(stream)
+            if i == 0
+                throw(EOFError())
             end
+            block = stream.blocks[i]
+            x = block_offset(block.offset)
+            @assert x < block.size
+            len = min(p_end - p, block.size - x)
+            src = pointer(block.decompressed_block, x + 1)
+            memcpy(p, src, len)
+            block.offset += len
             p += len
         end
     end
@@ -242,15 +264,16 @@ if VERSION > v"0.5-"
         elseif stream.mode != WRITE_MODE
             throw(ArgumentError("stream is not writable"))
         end
+        block = stream.blocks[1]
         p_end = p + n
         while p < p_end
-            x = block_offset(stream.offset)
-            len = min(p_end - p, stream.size - x)
-            dst = pointer(stream.decompressed_block, x + 1)
+            x = block_offset(block.offset)
+            len = min(p_end - p, block.size - x)
+            dst = pointer(block.decompressed_block, x + 1)
             memcpy(dst, p, len)
-            x = block_offset(stream.offset += len)
-            if x == stream.size
-                write_block(stream)
+            x = block_offset(block.offset += len)
+            if x == block.size
+                ensure_buffer_room(stream)
             end
             p += len
         end
@@ -262,16 +285,35 @@ end
 # Internal functions
 # ------------------
 
-# Ensure buffered data for reading.
+# Ensure buffered data (at least 1 byte) for reading.
 function ensure_buffered_data(stream)
     @assert stream.mode == READ_MODE
-    while block_offset(stream.offset) == stream.size
-        if eof(stream.io)
-            return false
+    @label again
+    for i in eachindex(stream.blocks)
+        block = stream.blocks[i]
+        if block_offset(block.offset) != block.size
+            return i
         end
-        read_block(stream)
     end
-    return true
+    if eof(stream.io)
+        return 0
+    end
+    read_blocks!(stream)
+    @goto again
+    return 0
+end
+
+# Ensure buffer room (at least 1 byte) for writing.
+function ensure_buffer_room(stream)
+    @assert stream.mode == WRITE_MODE
+    for i in eachindex(stream.blocks)
+        block = stream.blocks[i]
+        if block_offset(block.offset) != block.size
+            return i
+        end
+    end
+    write_blocks!(stream)
+    return 1
 end
 
 # A wrapper of memcpy.
@@ -292,58 +334,53 @@ function bgzferror(message::AbstractString="malformed BGZF data")
     throw(BGZFDataError(message))
 end
 
-# Read and inflate a compressed block.
-function read_block(stream)
+# Read and inflate blocks.
+function read_blocks!(stream)
     @assert stream.mode == READ_MODE
 
-    file_offset = position(stream.io)
-
-    if eof(stream.io)
-        stream.offset = VirtualOffset(file_offset, 0)
-        stream.size = 0
-        return
+    # read BGZF blocks in sequence
+    n_blocks = 0
+    while n_blocks < length(stream.blocks) && !eof(stream.io)
+        block = stream.blocks[n_blocks += 1]
+        block.offset = VirtualOffset(position(stream.io), 0)
+        bsize = read_bgzf_block!(stream.io, block.compressed_block)
+        zstream = block.zstream
+        zstream.next_in = pointer(block.compressed_block)
+        zstream.avail_in = bsize
+        zstream.next_out = pointer(block.decompressed_block)
+        zstream.avail_out = BGZF_MAX_BLOCK_SIZE
     end
 
-    bsize = read_bgzf_block(stream)
-    zstream = stream.zstream
-    zstream.next_in = pointer(stream.compressed_block)
-    zstream.avail_in = bsize
-    zstream.next_out = pointer(stream.decompressed_block)
-    zstream.avail_out = BGZF_MAX_BLOCK_SIZE
-
-    ret = ccall(
-        (:inflate, Libz._zlib),
-        Cint,
-        (Ref{Libz.ZStream}, Cint),
-        zstream, Libz.Z_FINISH)
-    if ret != Libz.Z_STREAM_END
-        if ret == Libz.Z_OK
-            error("block size may exceed BGZF_MAX_BLOCK_SIZE")
-        else
-            error("failed to decompress a BGZF block (zlib error $(ret))")
-        end
+    # inflate blocks in parallel
+    @threads for i in 1:n_blocks
+        block = stream.blocks[i]
+        zstream = block.zstream
+        old_avail_out = zstream.avail_out
+        ret = ccall(
+            (:inflate, Libz._zlib),
+            Cint,
+            (Ref{Libz.ZStream}, Cint),
+            zstream, Libz.Z_FINISH)
+        # FIXME: check ret value
+        block.size = old_avail_out - zstream.avail_out
     end
-    stream.offset = VirtualOffset(file_offset, 0)
-    stream.size = BGZF_MAX_BLOCK_SIZE - zstream.avail_out
 
-    # the decompresed block size must be strictly smaller than 64KiB
-    @assert stream.size < BGZF_MAX_BLOCK_SIZE
-
-    reset_zstream(stream)
+    for i in 1:n_blocks
+        block = stream.blocks[i]
+        # the decompresed block size must be strictly smaller than 64KiB
+        @assert block.size < BGZF_MAX_BLOCK_SIZE
+        reset_zstream(block.zstream, stream.mode)
+    end
 end
 
-# Read a compressed BGZF block and return the size.
-function read_bgzf_block(stream)
-    source = stream.io
-    block = stream.compressed_block
+# Read a BGZF block from `input`.
+function read_bgzf_block!(input, block)
+    # TODO: check the number of read bytes
 
     # +---+---+---+---+---+---+---+---+---+---+
     # |ID1|ID2|CM |FLG|     MTIME     |XFL|OS | (more-->)
     # +---+---+---+---+---+---+---+---+---+---+
-    n = readbytes!(source, block, 10)
-    if n != 10
-        bgzferror()
-    end
+    unsafe_read(input, pointer(block), 10)
     id1_ok = block[1] == 0x1f
     id2_ok = block[2] == 0x8b
     cm_ok  = block[3] == 0x08
@@ -359,15 +396,9 @@ function read_bgzf_block(stream)
     # +---+---+=================================+
     # | XLEN  |...XLEN bytes of "extra field"...| (more-->)
     # +---+---+=================================+
-    n = readbytes!(source, view(block, 11:endof(block)), 2)
-    if n != 2
-        bgzferror()
-    end
+    unsafe_read(input, pointer(block, 11) , 2)
     xlen = UInt16(block[11]) | UInt16(block[12]) << 8
-    n = readbytes!(source, view(block, 13:endof(block)), xlen)
-    if n != xlen
-        bgzferror()
-    end
+    unsafe_read(input, pointer(block, 13), xlen)
     bsize::Int = 0
     pos = 12
     while pos < 12 + xlen
@@ -391,20 +422,52 @@ function read_bgzf_block(stream)
     # |...compressed blocks...|     CRC32     |     ISIZE     |
     # +=======================+---+---+---+---+---+---+---+---+
     size = bsize - 1 - xlen - 19 + 8
-    @static if VERSION > v"0.5-"
-        unsafe_read(source, pointer(block, 13 + xlen), size)
-    else
-        n = readbytes!(source, view(block, (13 + xlen):endof(block)), size)
-        if n != size
-            bgzferror()
-        end
-    end
+    unsafe_read(input, pointer(block, 13 + xlen), size)
 
-    if eof(source) && !is_eof_block(block)
+    if eof(input) && !is_eof_block(block)
         bgzferror("no end-of-file marker (maybe a truncated file)")
     end
 
     return bsize
+end
+
+function write_blocks!(stream)
+    @assert stream.mode == WRITE_MODE
+
+    n_blocks = length(stream.blocks)
+    @assert n_blocks == 1
+
+    for i in 1:n_blocks
+        block = stream.blocks[i]
+        zstream = block.zstream
+        zstream.next_in = pointer(block.decompressed_block)
+        zstream.avail_in = block_offset(block.offset)
+        zstream.next_out = pointer(block.compressed_block, 9)
+        zstream.avail_out = BGZF_MAX_BLOCK_SIZE - 8
+
+        ret = ccall(
+            (:deflate, Libz._zlib),
+            Cint,
+            (Ref{Libz.ZStream}, Cint),
+            zstream, Libz.Z_FINISH)
+        if ret != Libz.Z_STREAM_END
+            if ret == Libz.Z_OK
+                error("block size may exceed BGZF_MAX_BLOCK_SIZE")
+            else
+                error("failed to compress a BGZF block (zlib error $(ret))")
+            end
+        end
+
+        blocksize = (BGZF_MAX_BLOCK_SIZE - 8) - zstream.avail_out + 8
+        fix_header!(block.compressed_block, blocksize)
+        nb = unsafe_write(stream.io, pointer(block.compressed_block), blocksize)
+        if nb != blocksize
+            error("failed to write a BGZF block")
+        end
+        block.offset = VirtualOffset(position(stream.io), 0)
+
+        reset_zstream(zstream, WRITE_MODE)
+    end
 end
 
 function write_block(stream)
@@ -468,19 +531,19 @@ function is_eof_block(block)
 end
 
 # Reset the zstream.
-function reset_zstream(stream)
-    if stream.mode == READ_MODE
+function reset_zstream(zstream, mode)
+    if mode == READ_MODE
         ret = ccall(
             (:inflateReset, Libz._zlib),
             Cint,
             (Ref{Libz.ZStream},),
-            stream.zstream)
+            zstream)
     else
         ret = ccall(
             (:deflateReset, Libz._zlib),
             Cint,
             (Ref{Libz.ZStream},),
-            stream.zstream)
+            zstream)
     end
     if ret != Libz.Z_OK
         error("failed to reset zlib stream")
@@ -488,19 +551,19 @@ function reset_zstream(stream)
 end
 
 # End the zstream.
-function end_zstream(stream)
-    if stream.mode == READ_MODE
+function end_zstream(zstream, mode)
+    if mode == READ_MODE
         ret = ccall(
             (:inflateEnd, Libz._zlib),
             Cint,
             (Ref{Libz.ZStream},),
-            stream.zstream)
+            zstream)
     else
         ret = ccall(
             (:deflateEnd, Libz._zlib),
             Cint,
             (Ref{Libz.ZStream},),
-            stream.zstream)
+            zstream)
     end
     if ret != Libz.Z_OK
         error("failed to end zlib stream")

@@ -35,7 +35,7 @@ function Base.isless(x::VirtualOffset, y::VirtualOffset)
 end
 
 # NOTE: This doesn't check the valid range of virtual offset.
-@compat function Base.:+(voffset::VirtualOffset, x::Integer)
+function Base.:+(voffset::VirtualOffset, x::Integer)
     return convert(VirtualOffset, convert(UInt64, voffset) + UInt64(x))
 end
 

@@ -6,12 +6,7 @@ export
     virtualoffset
 
 using Libz
-using Compat
-
-if VERSION < v"0.5-"
-    # This should be done in Compat.jl.
-    const view = sub
-end
+using Base.Threads
 
 include("virtualoffset.jl")
 include("bgzfstream.jl")
