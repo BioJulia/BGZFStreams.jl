@@ -127,6 +127,15 @@ function virtualoffset(stream::BGZFStream)
     return stream.offset
 end
 
+function Base.show(io::IO, stream::BGZFStream)
+    print(io,
+        summary(stream),
+        "(<",
+        "mode=", stream.mode == READ_MODE ? "\"read\", " : "\"write\", ",
+        "offset=", stream.offset,
+        ">)")
+end
+
 function Base.isopen(stream::BGZFStream)
     return stream.isopen
 end
