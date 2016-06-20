@@ -19,6 +19,7 @@ stream = BGZFStream(filename, "r")
 @test read(stream, UInt8) === UInt8('r')
 @test eof(stream)
 close(stream)
+@test_throws ArgumentError read(stream, UInt8)
 
 stream = BGZFStream(filename, "r")
 @test virtualoffset(stream) === VirtualOffset(0, 0)
@@ -67,6 +68,7 @@ stream = BGZFStream(buffer, "w")
 write(stream, "foo")
 close(stream)
 @test !isopen(buffer)
+@test_throws ArgumentError write(stream, 0x01)
 
 # Round trip
 for n in [0, 1, 2, 5, 10, 50, 100, 10_000, 100_000, 1_000_000]

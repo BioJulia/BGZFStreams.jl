@@ -176,7 +176,9 @@ function Base.seek(stream::BGZFStream, voffset::VirtualOffset)
 end
 
 function Base.read(stream::BGZFStream, ::Type{UInt8})
-    if stream.mode != READ_MODE
+    if !isopen(stream)
+        throw(ArgumentError("stream is already closed"))
+    elseif stream.mode != READ_MODE
         throw(ArgumentError("stream is not readable"))
     end
     if block_offset(stream.offset) == stream.size
@@ -191,7 +193,9 @@ function Base.read(stream::BGZFStream, ::Type{UInt8})
 end
 
 function Base.write(stream::BGZFStream, byte::UInt8)
-    if stream.mode != WRITE_MODE
+    if !isopen(stream)
+        throw(ArgumentError("stream is already closed"))
+    elseif stream.mode != WRITE_MODE
         throw(ArgumentError("stream is not writable"))
     end
     x = block_offset(stream.offset += 1)
@@ -204,7 +208,9 @@ end
 
 if VERSION > v"0.5-"
     function Base.unsafe_read(stream::BGZFStream, p::Ptr{UInt8}, n::UInt)
-        if stream.mode != READ_MODE
+        if !isopen(stream)
+            throw(ArgumentError("stream is already closed"))
+        elseif stream.mode != READ_MODE
             throw(ArgumentError("stream is not readable"))
         end
         p_end = p + n
@@ -222,7 +228,9 @@ if VERSION > v"0.5-"
     end
 
     function Base.unsafe_write(stream::BGZFStream, p::Ptr{UInt8}, n::UInt)
-        if stream.mode != WRITE_MODE
+        if !isopen(stream)
+            throw(ArgumentError("stream is already closed"))
+        elseif stream.mode != WRITE_MODE
             throw(ArgumentError("stream is not writable"))
         end
         p_end = p + n
