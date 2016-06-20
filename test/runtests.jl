@@ -72,17 +72,35 @@ close(stream)
 
 # Round trip
 for n in [0, 1, 2, 5, 10, 50, 100, 10_000, 100_000, 1_000_000]
+    data = rand(0x00:0xf0, n)
+
+    # bulk read/write
     buffer = IOBuffer()
     stream = BGZFStream(buffer, "w")
     # HACK: do not close the buffer after the stream is closed
     stream.onclose = io -> nothing
-    data = rand(0x00:0xf0, n)
     write(stream, data)
     close(stream)
-
     seekstart(buffer)
     stream = BGZFStream(buffer)
-    data′ = read(stream)
-    @test data′ == data
+    @test data == read(stream)
+    close(stream)
+
+    # read/write byte by byte
+    buffer = IOBuffer()
+    stream = BGZFStream(buffer, "w")
+    # HACK: do not close the buffer after the stream is closed
+    stream.onclose = io -> nothing
+    for x in data
+        write(stream, x)
+    end
+    close(stream)
+    seekstart(buffer)
+    stream = BGZFStream(buffer)
+    data′ = UInt8[]
+    while !eof(stream)
+        push!(data′, read(stream, UInt8))
+    end
+    @test data == data′
     close(stream)
 end
