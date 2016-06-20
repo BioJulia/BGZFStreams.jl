@@ -234,51 +234,49 @@ function Base.write(stream::BGZFStream, byte::UInt8)
     return 1
 end
 
-if VERSION > v"0.5-"
-    function Base.unsafe_read(stream::BGZFStream, p::Ptr{UInt8}, n::UInt)
-        if !isopen(stream)
-            throw(ArgumentError("stream is already closed"))
-        elseif stream.mode != READ_MODE
-            throw(ArgumentError("stream is not readable"))
-        end
-        p_end = p + n
-        while p < p_end
-            i = ensure_buffered_data(stream)
-            if i == 0
-                throw(EOFError())
-            end
-            block = stream.blocks[i]
-            x = block_offset(block.offset)
-            @assert x < block.size
-            len = min(p_end - p, block.size - x)
-            src = pointer(block.decompressed_block, x + 1)
-            memcpy(p, src, len)
-            block.offset += len
-            p += len
-        end
+function Base.unsafe_read(stream::BGZFStream, p::Ptr{UInt8}, n::UInt)
+    if !isopen(stream)
+        throw(ArgumentError("stream is already closed"))
+    elseif stream.mode != READ_MODE
+        throw(ArgumentError("stream is not readable"))
     end
+    p_end = p + n
+    while p < p_end
+        i = ensure_buffered_data(stream)
+        if i == 0
+            throw(EOFError())
+        end
+        block = stream.blocks[i]
+        x = block_offset(block.offset)
+        @assert x < block.size
+        len = min(p_end - p, block.size - x)
+        src = pointer(block.decompressed_block, x + 1)
+        memcpy(p, src, len)
+        block.offset += len
+        p += len
+    end
+end
 
-    function Base.unsafe_write(stream::BGZFStream, p::Ptr{UInt8}, n::UInt)
-        if !isopen(stream)
-            throw(ArgumentError("stream is already closed"))
-        elseif stream.mode != WRITE_MODE
-            throw(ArgumentError("stream is not writable"))
-        end
-        block = stream.blocks[1]
-        p_end = p + n
-        while p < p_end
-            x = block_offset(block.offset)
-            len = min(p_end - p, block.size - x)
-            dst = pointer(block.decompressed_block, x + 1)
-            memcpy(dst, p, len)
-            x = block_offset(block.offset += len)
-            if x == block.size
-                ensure_buffer_room(stream)
-            end
-            p += len
-        end
-        return Int(n)
+function Base.unsafe_write(stream::BGZFStream, p::Ptr{UInt8}, n::UInt)
+    if !isopen(stream)
+        throw(ArgumentError("stream is already closed"))
+    elseif stream.mode != WRITE_MODE
+        throw(ArgumentError("stream is not writable"))
     end
+    block = stream.blocks[1]
+    p_end = p + n
+    while p < p_end
+        x = block_offset(block.offset)
+        len = min(p_end - p, block.size - x)
+        dst = pointer(block.decompressed_block, x + 1)
+        memcpy(dst, p, len)
+        x = block_offset(block.offset += len)
+        if x == block.size
+            ensure_buffer_room(stream)
+        end
+        p += len
+    end
+    return Int(n)
 end
 
 
