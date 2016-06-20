@@ -381,9 +381,14 @@ function read_bgzf_block(stream)
     # +=======================+---+---+---+---+---+---+---+---+
     # |...compressed blocks...|     CRC32     |     ISIZE     |
     # +=======================+---+---+---+---+---+---+---+---+
-    n = readbytes!(source, view(block, (13 + xlen):endof(block)), bsize - 1 - xlen - 19 + 8)
-    if n != bsize - 1 - xlen - 19 + 8
-        bgzferror()
+    size = bsize - 1 - xlen - 19 + 8
+    @static if VERSION > v"0.5-"
+        unsafe_read(source, pointer(block, 13 + xlen), size)
+    else
+        n = readbytes!(source, view(block, (13 + xlen):endof(block)), size)
+        if n != size
+            bgzferror()
+        end
     end
 
     if eof(source) && !is_eof_block(block)
