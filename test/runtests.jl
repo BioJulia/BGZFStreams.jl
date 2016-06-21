@@ -21,7 +21,6 @@ stream = BGZFStream(filename, "r")
 close(stream)
 @test_throws ArgumentError read(stream, UInt8)
 
-#=
 stream = BGZFStream(filename, "r")
 @test virtualoffset(stream) === VirtualOffset(0, 0)
 read(stream, UInt8)
@@ -31,7 +30,6 @@ seek(stream, VirtualOffset(0, 1))
 @test read(stream, UInt8) === UInt8('a')
 @test read(stream, UInt8) === UInt8('r')
 close(stream)
-=#
 
 # Empty data.
 empty_block = copy(BGZFStreams.EOF_BLOCK)

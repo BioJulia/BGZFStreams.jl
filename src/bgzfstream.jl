@@ -145,7 +145,7 @@ end
 Return the current virtual file offset of `stream`.
 """
 function virtualoffset(stream::BGZFStream)
-    return stream.offset
+    return stream.blocks[stream.block_index].offset
 end
 
 function Base.show(io::IO, stream::BGZFStream)
@@ -195,8 +195,12 @@ function Base.seek(stream::BGZFStream, voffset::VirtualOffset)
         throw(ArgumentError("BGZFStream in write mode is not seekable"))
     end
     seek(stream.io, file_offset(voffset))
-    read_block(stream)
-    stream.offset = voffset
+    read_blocks!(stream)
+    block = first(stream.blocks)
+    if block_offset(voffset) ≥ block.size
+        throw(ArgumentError("too large in-block offset"))
+    end
+    block.offset = voffset
     return
 end
 
@@ -284,20 +288,20 @@ end
 # ------------------
 
 # Ensure buffered data (at least 1 byte) for reading.
-function ensure_buffered_data(stream)
+function ensure_buffered_data(stream)::Int
     @assert stream.mode == READ_MODE
-    @label again
-    for i in eachindex(stream.blocks)
-        block = stream.blocks[i]
+    @label doit
+    while stream.block_index ≤ endof(stream.blocks)
+        block = stream.blocks[stream.block_index]
         if block_offset(block.offset) != block.size
-            return i
+            return stream.block_index
         end
+        stream.block_index += 1
     end
-    if eof(stream.io)
-        return 0
+    if !eof(stream.io)
+        read_blocks!(stream)
+        @goto doit
     end
-    read_blocks!(stream)
-    @goto again
     return 0
 end
 
@@ -369,6 +373,9 @@ function read_blocks!(stream)
         @assert block.size < BGZF_MAX_BLOCK_SIZE
         reset_zstream(block.zstream, stream.mode)
     end
+
+    stream.block_index = 1
+    return
 end
 
 # Read a BGZF block from `input`.
