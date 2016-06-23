@@ -118,7 +118,7 @@ function BGZFStream(io::IO, mode::AbstractString="r")
     # the number of parallel workers
     mode′ = mode == "r" ? READ_MODE : WRITE_MODE
     if mode′ == READ_MODE
-        blocks = [Block(mode′) for _ in nthreads()]
+        blocks = [Block(mode′) for _ in 1:nthreads()]
     else
         # Write mode is not (yet?) multi-threaded.
         blocks = [Block(mode′)]
