@@ -41,17 +41,15 @@ end
 
 function offsets(voffset::VirtualOffset)
     x = convert(UInt64, voffset)
-    return x >> 16, x & ((UInt64(1) << 16) - 1)
+    return x >> 16, x & 0xffff
 end
 
 function file_offset(voffset::VirtualOffset)
-    x = convert(UInt64, voffset)
-    return x >> 16
+    return convert(UInt64, voffset) >> 16
 end
 
 function block_offset(voffset::VirtualOffset)
-    x = convert(UInt64, voffset)
-    return x & ((UInt64(1) << 16) - 1)
+    return convert(UInt64, voffset) & 0xffff
 end
 
 function Base.show(io::IO, voffset::VirtualOffset)
