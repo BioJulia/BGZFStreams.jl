@@ -288,8 +288,8 @@ end
 # ------------------
 
 # Ensure buffered data (at least 1 byte) for reading.
-function ensure_buffered_data(stream)::Int
-    @assert stream.mode == READ_MODE
+@inline function ensure_buffered_data(stream)::Int
+    #@assert stream.mode == READ_MODE
     @label doit
     while stream.block_index ≤ endof(stream.blocks)
         block = stream.blocks[stream.block_index]
