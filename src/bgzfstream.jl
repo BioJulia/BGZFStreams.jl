@@ -1,6 +1,9 @@
 # BGZFStream
 # ==========
 
+# Internal details
+# ----------------
+#
 # When reading data from an input, compressed data will be read to a buffer
 # (compressed block) and then inflated into a decompressed block at a time.
 # When writing data to an output, raw data will be deflated into a compressed
@@ -9,20 +12,22 @@
 #
 # Read mode (.mode = READ_MODE)
 # -----------------------------
+#
 #          compressed block          decompressed block
 #          +---------------+         +---------------+
 # .io ---> |xxxxxxx        | ------> |xxxxxxxxxxx    | --->
 #     read +---------------+ inflate +---------------+ read
-#                                    |------>| block_offset(.offset) ∈ [0, 64K)
+#                                    |------>| inblock_offset(.offset) ∈ [0, 64K)
 #                                    |<-------->| .size ∈ [0, 64K]
 #
 # Write mode (.mode = WRITE_MODE)
 # -------------------------------
+#
 #          compressed block          decompressed block
 #          +---------------+         +---------------+
 # .io <--- |xxxxxxx        | <------ |xxxxxxxx       | <---
 #    write +---------------+ deflate +---------------+ write
-#                                    |------>| block_offset(.offset) ∈ [0, 64K)
+#                                    |------>| inblock_offset(.offset) ∈ [0, 64K)
 #                                    |<------------>| .size = 64K - 256
 # - xxx: used data
 # - 64K: 65536 (= BGZF_MAX_BLOCK_SIZE = 64 * 1024)
@@ -35,7 +40,7 @@ type Block
     decompressed_block::Vector{UInt8}
 
     # block offset in a file
-    block_offset::Int
+    inblock_offset::Int
 
     # the next reading byte position in a block
     position::Int
@@ -152,7 +157,7 @@ function virtualoffset(stream::BGZFStream)
     else
         block = stream.blocks[1]
     end
-    return VirtualOffset(block.block_offset, block.position - 1)
+    return VirtualOffset(block.inblock_offset, block.position - 1)
 end
 
 function Base.show(io::IO, stream::BGZFStream)
@@ -201,14 +206,15 @@ function Base.seek(stream::BGZFStream, voffset::VirtualOffset)
     if stream.mode == WRITE_MODE
         throw(ArgumentError("BGZFStream in write mode is not seekable"))
     end
-    seek(stream.io, file_offset(voffset))
+    file_offset, inblock_offset = offsets(voffset)
+    seek(stream.io, file_offset)
     read_blocks!(stream)
     block = first(stream.blocks)
-    if block_offset(voffset) ≥ block.size
+    if inblock_offset ≥ block.size
         throw(ArgumentError("too large in-block offset"))
     end
-    block.block_offset = file_offset(voffset)
-    block.position = block_offset(voffset) + 1
+    block.inblock_offset = file_offset
+    block.position = inblock_offset + 1
     return
 end
 
@@ -334,7 +340,7 @@ function read_blocks!(stream)
     n_blocks = 0
     while n_blocks < length(stream.blocks) && !eof(stream.io)
         block = stream.blocks[n_blocks += 1]
-        block.block_offset = position(stream.io)
+        block.inblock_offset = position(stream.io)
         block.position = 1
         bsize = read_bgzf_block!(stream.io, block.compressed_block)
         zstream = block.zstream
@@ -459,7 +465,7 @@ function write_blocks!(stream)
         if nb != blocksize
             error("failed to write a BGZF block")
         end
-        block.block_offset = position(stream.io)
+        block.inblock_offset = position(stream.io)
         block.position = 1
 
         reset_zstream(zstream, WRITE_MODE)

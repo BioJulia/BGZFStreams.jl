@@ -44,15 +44,7 @@ function offsets(voffset::VirtualOffset)
     return x >> 16, x & 0xffff
 end
 
-function file_offset(voffset::VirtualOffset)
-    return convert(UInt64, voffset) >> 16
-end
-
-function block_offset(voffset::VirtualOffset)
-    return convert(UInt64, voffset) & 0xffff
-end
-
 function Base.show(io::IO, voffset::VirtualOffset)
-    x, y = offsets(voffset)
-    print(io, summary(voffset), "(", x, ", ", y, ")")
+    file_offset, inblock_offset = offsets(voffset)
+    print(io, summary(voffset), "(", file_offset, ", ", inblock_offset, ")")
 end

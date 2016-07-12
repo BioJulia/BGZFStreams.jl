@@ -6,11 +6,9 @@ voff = VirtualOffset(0, 0)
 @test voff == VirtualOffset(0, 0)
 @test voff != VirtualOffset(0, 1)
 @test voff != VirtualOffset(1, 0)
-@test BGZFStreams.file_offset(voff) == 0
-@test BGZFStreams.block_offset(voff) == 0
+@test BGZFStreams.offsets(voff) == (0, 0)
 voff += 1
-@test BGZFStreams.file_offset(voff) == 0
-@test BGZFStreams.block_offset(voff) == 1
+@test BGZFStreams.offsets(voff) == (0, 1)
 
 filename = Pkg.dir("BGZFStreams", "test", "bar.bgz")
 stream = BGZFStream(filename, "r")
