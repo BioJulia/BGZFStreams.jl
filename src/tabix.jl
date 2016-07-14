@@ -167,7 +167,9 @@ function overlapchunks(index::Tabix, seqid::Integer, interval::UnitRange)
             end
         end
     end
+
     sort!(ret)
+    reduce!(ret)
 
     return ret
 end
@@ -178,6 +180,24 @@ function overlapchunks(index::Tabix, seqname::AbstractString, interval::UnitRang
         throw(ArgumentError("sequence name $(seqname) is not included in the index"))
     end
     return overlapchunks(index, seqid, interval)
+end
+
+# Merge chunks to minimize the number of seek operations.
+function reduce!(chunks)
+    @assert issorted(chunks)
+    i = 1
+    while i < endof(chunks)
+        chunk = chunks[i]
+        next = chunks[i+1]
+        if chunk.stop < next.start
+            # neither overlapping nor adjacent
+            i += 1
+            continue
+        end
+        chunks[i] = Chunk(chunk.start, max(chunk.stop, next.stop))
+        deleteat!(chunks, i + 1)
+    end
+    return chunks
 end
 
 # Calculate bins overlapping a region [from, to] (one-based).
