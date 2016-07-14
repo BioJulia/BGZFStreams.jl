@@ -138,7 +138,13 @@ end
 
 const LinearWindowSize = 16 * 1024
 
-# Return chunks overlapping the range; seqid and interval always must be 1-based index.
+"""
+    overlapchunks(index::Tabix, seqname::String, interval::UnitRange)
+    overlapchunks(index::Tabix, seqid::Integer, interval::UnitRange)
+
+Return chunks overlapping the range specified by `seqname` (or `seqid`) and `interval`;
+`seqid` and `interval` must be 1-based index and inclusive.
+"""
 function overlapchunks(index::Tabix, seqid::Integer, interval::UnitRange)
     if !(1 ≤ seqid ≤ endof(index.indexes))
         throw(ArgumentError("sequence id $(seqid) is out of range"))

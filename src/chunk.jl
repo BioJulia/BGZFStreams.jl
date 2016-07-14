@@ -1,5 +1,7 @@
 # Chunk
 # =====
+#
+# Consecutive range of BGZF files.
 
 # [start, stop)
 immutable Chunk
