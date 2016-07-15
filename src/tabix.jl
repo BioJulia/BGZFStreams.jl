@@ -165,8 +165,19 @@ const LinearWindowSize = 16 * 1024
     overlapchunks(index::Tabix, seqname::String, interval::UnitRange)
     overlapchunks(index::Tabix, seqid::Integer, interval::UnitRange)
 
-Return chunks overlapping the range specified by `seqname` (or `seqid`) and `interval`;
-`seqid` and `interval` must be 1-based index and inclusive.
+Return chunks possibly overlapping the range specified by `seqname` (or `seqid`)
+and `interval`; `seqid` and `interval` must be 1-based index and inclusive.
+
+NOTE: Records within the returned chunks are not guaranteed to overlap the query
+region. The user need to check the condition as:
+    line = readline(stream)
+    values = split(chomp(line), '\t')
+    seqname = value[index.columns[1]]
+    start = parse(Int, index.columns[2])
+    stop = parse(Int, index.columns[3]) - 1  # needs -1 for the BED format
+    if seqname == target_seqname && intersect(start:stop, target_interval)
+        # the line overlaps the query region
+    end
 """
 function overlapchunks(index::Tabix, seqid::Integer, interval::UnitRange)
     if !(1 ≤ seqid ≤ endof(index.indexes))
