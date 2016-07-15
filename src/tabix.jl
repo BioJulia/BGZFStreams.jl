@@ -13,13 +13,19 @@ typealias BinIndex Dict{UInt32,Vector{Chunk}}
 # Linear index
 typealias LinearIndex Vector{VirtualOffset}
 
+type PseudoBin
+    unmapped::Chunk
+    n_mapped::UInt64
+    n_unmapped::UInt64
+end
+
 type Tabix
     format::Int32
     columns::NTuple{3,Int}
     meta::Char
     skip::Int
     names::Vector{String}
-    indexes::Vector{Tuple{BinIndex,LinearIndex}}
+    indexes::Vector{Tuple{BinIndex,LinearIndex,PseudoBin}}
     n_no_coor::Nullable{UInt64}
 end
 
@@ -76,20 +82,32 @@ function Base.read(input_::IO, ::Type{Tabix})
     data = read(input, UInt8, l_nm)
     names = split(String(data), '\0', keep=false)
 
-    indexes = Tuple{BinIndex,LinearIndex}[]
+    indexes = Tuple{BinIndex,LinearIndex,PseudoBin}[]
     for n in 1:n_refs
         binindex = BinIndex()
         n_bins = read(input, Int32)
+        local pbin::PseudoBin
         for i in 1:n_bins
             bin = read(input, UInt32)
             n_chunks = read(input, Int32)
-            chunks = Chunk[]
-            for j in 1:n_chunks
+            if bin == 37450
+                # Pseudo-bin:
+                # This is not mentioned in tabix's specs but exists in real data.
+                @assert n_chunks == 2
                 cnk_beg = read(input, UInt64)
                 cnk_end = read(input, UInt64)
-                push!(chunks, Chunk(cnk_beg, cnk_end))
+                n_mapped = read(input, UInt64)
+                n_unmapped = read(input, UInt64)
+                pbin = PseudoBin(Chunk(cnk_beg, cnk_end), n_mapped, n_unmapped)
+            else
+                chunks = Chunk[]
+                for j in 1:n_chunks
+                    cnk_beg = read(input, UInt64)
+                    cnk_end = read(input, UInt64)
+                    push!(chunks, Chunk(cnk_beg, cnk_end))
+                end
+                binindex[bin] = chunks
             end
-            binindex[bin] = chunks
         end
 
         n_intvs = read(input, Int32)
@@ -99,7 +117,7 @@ function Base.read(input_::IO, ::Type{Tabix})
             push!(linindex, ioff)
         end
 
-        push!(indexes, (binindex, linindex))
+        push!(indexes, (binindex, linindex, pbin))
     end
 
     if !eof(input)
@@ -124,6 +142,7 @@ for chunk in overlapchunks(index, seqname, interval)
     while virtualoffset(stream) in chunk
         line = chomp(readline(stream))
         values = split(line, '\t')
+        seqname, start, stop = values[columns]
         if <no overlap>
             break
         end
