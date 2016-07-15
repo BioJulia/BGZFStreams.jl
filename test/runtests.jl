@@ -30,6 +30,10 @@ end
     seek(stream, VirtualOffset(0, 1))
     @test read(stream, UInt8) === UInt8('a')
     @test read(stream, UInt8) === UInt8('r')
+    seekstart(stream)
+    @test read(stream, UInt8) === UInt8('b')
+    @test read(stream, UInt8) === UInt8('a')
+    @test read(stream, UInt8) === UInt8('r')
     close(stream)
 
     # Empty data.

@@ -202,6 +202,10 @@ function Base.eof(stream::BGZFStream)
     end
 end
 
+function Base.seekstart(stream::BGZFStream)
+    seek(stream, VirtualOffset(0, 0))
+end
+
 function Base.seek(stream::BGZFStream, voffset::VirtualOffset)
     if stream.mode == WRITE_MODE
         throw(ArgumentError("BGZFStream in write mode is not seekable"))
