@@ -3,9 +3,9 @@ module BGZFStreams
 export
     VirtualOffset,
     BGZFStream,
-    virtualoffset
-    # Tabix,
-    # overlapchunks
+    virtualoffset,
+    Tabix,
+    overlapchunks
 
 using Libz
 using Base.Threads

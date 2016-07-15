@@ -136,21 +136,6 @@ function Base.read(input_::IO, ::Type{Tabix})
         n_no_coor)
 end
 
-#=
-for chunk in overlapchunks(index, seqname, interval)
-    seek(stream, chunk)
-    while virtualoffset(stream) in chunk
-        line = chomp(readline(stream))
-        values = split(line, '\t')
-        seqname, start, stop = values[columns]
-        if <no overlap>
-            break
-        end
-        # do something
-    end
-end
-=#
-
 function Base.seek(stream::BGZFStream, chunk::Chunk)
     seek(stream, chunk.start)
 end
