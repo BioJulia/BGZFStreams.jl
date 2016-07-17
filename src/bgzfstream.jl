@@ -359,11 +359,7 @@ function read_blocks!(stream)
         block = stream.blocks[i]
         zstream = block.zstream
         old_avail_out = zstream.avail_out
-        ret = ccall(
-            (:inflate, Libz._zlib),
-            Cint,
-            (Ref{Libz.ZStream}, Cint),
-            zstream, Libz.Z_FINISH)
+        ret = Libz.inflate!(zstream, Libz.Z_FINISH)
         # FIXME: check ret value
         block.size = old_avail_out - zstream.avail_out
     end
@@ -450,11 +446,7 @@ function write_blocks!(stream)
         zstream.next_out = pointer(block.compressed_block, 9)
         zstream.avail_out = BGZF_MAX_BLOCK_SIZE - 8
 
-        ret = ccall(
-            (:deflate, Libz._zlib),
-            Cint,
-            (Ref{Libz.ZStream}, Cint),
-            zstream, Libz.Z_FINISH)
+        ret = Libz.deflate!(zstream, Libz.Z_FINISH)
         if ret != Libz.Z_STREAM_END
             if ret == Libz.Z_OK
                 error("block size may exceed BGZF_MAX_BLOCK_SIZE")
@@ -509,39 +501,19 @@ end
 # Reset the zstream.
 function reset_zstream(zstream, mode)
     if mode == READ_MODE
-        ret = ccall(
-            (:inflateReset, Libz._zlib),
-            Cint,
-            (Ref{Libz.ZStream},),
-            zstream)
+        Libz.@zcheck Libz.reset_inflate!(zstream)
     else
-        ret = ccall(
-            (:deflateReset, Libz._zlib),
-            Cint,
-            (Ref{Libz.ZStream},),
-            zstream)
+        Libz.@zcheck Libz.reset_deflate!(zstream)
     end
-    if ret != Libz.Z_OK
-        error("failed to reset zlib stream")
-    end
+    return
 end
 
 # End the zstream.
 function end_zstream(zstream, mode)
     if mode == READ_MODE
-        ret = ccall(
-            (:inflateEnd, Libz._zlib),
-            Cint,
-            (Ref{Libz.ZStream},),
-            zstream)
+        Libz.@zcheck Libz.end_inflate!(zstream)
     else
-        ret = ccall(
-            (:deflateEnd, Libz._zlib),
-            Cint,
-            (Ref{Libz.ZStream},),
-            zstream)
+        Libz.@zcheck Libz.end_deflate!(zstream)
     end
-    if ret != Libz.Z_OK
-        error("failed to end zlib stream")
-    end
+    return
 end
