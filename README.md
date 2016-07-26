@@ -29,3 +29,46 @@ virtualoffset(stream)
 
 close(stream)
 ```
+
+
+## Usage
+
+The BGZFStreams.jl package exports two types and a function to the package user:
+
+* Types:
+    * `BGZFStream`: an `IO` stream of the BGZF file format
+    * `VirtualOffset`: data offset in a BGZF file
+* Function:
+    * `virtualoffset(stream)`: returns the current virtual file offset of `stream`
+
+The `BGZFStream` type wraps an underlying `IO` object and transparently inflate
+(for reading) or deflate (for writing) data. Since it is a subtype of `IO`, an
+instance of it behaves like other `IO` objects, but the `seek` method takes a
+virtual offset instead of a normal file offset as its second argument.
+
+The `VirtualOffset` type represents a 64-bit virtual file offset as described in
+the specification of the SAM file format. That is, the most significant 48-bit
+integer of a virtual offset is a byte offset to the BGZF file to the beggining
+position of a BGZF block and the least significant 16-bit integer is a byte
+offset to the uncompressed byte(s).
+
+The `virtualoffset(stream::BGZFStream)` returns the current virtual file offset.
+More specifically, it returns the virtual offset of the next reading byte while
+reading and the next writing byte while writing.
+
+
+## Parallell Processing
+
+A major bottleneck of processing a BGZF file is the inflation and deflation
+process. The throughput of reading data is ~100 MiB/s, which is quite slower
+than that of raw reading from a file. In order to alleviate this problem, this
+package supports parallelized inflation when reading compressed data. This
+requires the support of multi-threading introduced in Julia 0.5. The
+`JULIA_NUM_THREADS` environmental variable sets the number of threads used for
+processing.
+
+    bash-3.2$ JULIA_NUM_THREADS=2 julia -q
+    julia> using Base.Threads
+
+    julia> nthreads()
+    2
