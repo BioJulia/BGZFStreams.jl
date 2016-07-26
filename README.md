@@ -4,7 +4,7 @@
 
 BGZF is a compression format that supports random access using *virtual file offsets*.
 
-See the SAM/BAM file format specs for the defails of BGZF: <https://samtools.github.io/hts-specs/SAMv1.pdf>.
+See the SAM/BAM file format specs for the details of BGZF: <https://samtools.github.io/hts-specs/SAMv1.pdf>.
 
 
 ## Synopsis
@@ -48,7 +48,7 @@ virtual offset instead of a normal file offset as its second argument.
 
 The `VirtualOffset` type represents a 64-bit virtual file offset as described in
 the specification of the SAM file format. That is, the most significant 48-bit
-integer of a virtual offset is a byte offset to the BGZF file to the beggining
+integer of a virtual offset is a byte offset to the BGZF file to the beginning
 position of a BGZF block and the least significant 16-bit integer is a byte
 offset to the uncompressed byte(s).
 
@@ -57,7 +57,7 @@ More specifically, it returns the virtual offset of the next reading byte while
 reading and the next writing byte while writing.
 
 
-## Parallell Processing
+## Parallel Processing
 
 A major bottleneck of processing a BGZF file is the inflation and deflation
 process. The throughput of reading data is ~100 MiB/s, which is quite slower
