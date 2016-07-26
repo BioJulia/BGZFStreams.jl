@@ -39,6 +39,10 @@ function Base.:+(voffset::VirtualOffset, x::Integer)
     return convert(VirtualOffset, convert(UInt64, voffset) + UInt64(x))
 end
 
+function Base.getindex(voffset::VirtualOffset, i::Integer)
+    return offsets(voffset)[i]
+end
+
 function offsets(voffset::VirtualOffset)
     x = convert(UInt64, voffset)
     return x >> 16, x & 0xffff

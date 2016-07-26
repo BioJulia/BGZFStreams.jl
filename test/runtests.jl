@@ -7,9 +7,16 @@ using Compat
     @test voff == VirtualOffset(0, 0)
     @test voff != VirtualOffset(0, 1)
     @test voff != VirtualOffset(1, 0)
-    @test BGZFStreams.offsets(voff) == (0, 0)
+    @test voff[1] == 0
+    @test voff[2] == 0
+
     voff += 1
-    @test BGZFStreams.offsets(voff) == (0, 1)
+    @test voff[1] == 0
+    @test voff[2] == 1
+
+    voff = VirtualOffset(1234, 555)
+    @test voff[1] == 1234
+    @test voff[2] == 555
 end
 
 @testset "BGZFStream" begin
