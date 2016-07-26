@@ -355,16 +355,19 @@ function read_blocks!(stream)
     end
 
     # inflate blocks in parallel
+    rets = Vector{Cint}(n_blocks)
     @threads for i in 1:n_blocks
         block = stream.blocks[i]
         zstream = block.zstream
         old_avail_out = zstream.avail_out
-        ret = Libz.inflate!(zstream, Libz.Z_FINISH)
-        # FIXME: check ret value
+        rets[i] = Libz.inflate!(zstream, Libz.Z_FINISH)
         block.size = old_avail_out - zstream.avail_out
     end
 
     for i in 1:n_blocks
+        if rets[i] != Libz.Z_STREAM_END
+            error("zlib failed to inflate a compressed block")
+        end
         block = stream.blocks[i]
         @assert block.size ≤ BGZF_MAX_BLOCK_SIZE
         reset_zstream(block.zstream, stream.mode)
