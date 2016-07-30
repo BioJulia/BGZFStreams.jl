@@ -1,6 +1,7 @@
 # BGZFStreams
 
 [![Build Status](https://travis-ci.org/BioJulia/BGZFStreams.jl.svg?branch=master)](https://travis-ci.org/BioJulia/BGZFStreams.jl)
+[![codecov.io](http://codecov.io/github/BioJulia/BGZFStreams.jl/coverage.svg?branch=master)](http://codecov.io/github/BioJulia/BGZFStreams.jl?branch=master)
 
 BGZF is a compression format that supports random access using *virtual file offsets*.
 
