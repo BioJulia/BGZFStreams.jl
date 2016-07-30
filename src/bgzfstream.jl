@@ -164,7 +164,7 @@ function Base.show(io::IO, stream::BGZFStream)
     print(io,
         summary(stream),
         "(<",
-        "mode=", stream.mode == READ_MODE ? "\"read\", " : "\"write\", ",
+        "mode=", stream.mode == READ_MODE ? "read" : "write",
         ">)")
 end
 

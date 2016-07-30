@@ -33,8 +33,17 @@ end
     @test read(stream, UInt8) === UInt8('a')
     @test read(stream, UInt8) === UInt8('r')
     @test eof(stream)
-    close(stream)
+    @test flush(stream) === nothing
+    @test close(stream) === nothing
+    @test string(stream) == "BGZFStreams.BGZFStream{IOStream}(<mode=read>)"
     @test_throws ArgumentError read(stream, UInt8)
+
+    stream = BGZFStream(filename, "r")
+    data = zeros(Int8, 3)
+    unsafe_read(stream, pointer(data), 3)
+    @test data == UInt8['b', 'a', 'r']
+    close(stream)
+    @test_throws ArgumentError unsafe_read(stream, pointer(data), 3)
 
     stream = BGZFStream(filename, "r")
     @test virtualoffset(stream) === VirtualOffset(0, 0)
@@ -68,12 +77,16 @@ end
     filename = tempname()
     try
         stream = BGZFStream(filename, "w")
+        @test virtualoffset(stream) == VirtualOffset(0, 0)
         @test write(stream, 'b') === 1
         @test write(stream, 'a') === 1
         @test write(stream, 'r') === 1
+        @test virtualoffset(stream) == VirtualOffset(0, 3)
         @test write(stream, "baz") === 3
         @test eof(stream)
-        close(stream)
+        @test flush(stream) === nothing
+        @test close(stream) === nothing
+        @test string(stream) == "BGZFStreams.BGZFStream{IOStream}(<mode=write>)"
     catch
         rethrow()
     finally
