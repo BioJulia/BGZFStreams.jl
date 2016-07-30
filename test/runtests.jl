@@ -6,9 +6,12 @@ using Compat
     voff = VirtualOffset(0, 0)
     @test voff == VirtualOffset(0, 0)
     @test voff != VirtualOffset(0, 1)
+    @test voff <= VirtualOffset(0, 1)
     @test voff != VirtualOffset(1, 0)
+    @test voff <= VirtualOffset(1, 0)
     @test voff[1] == 0
     @test voff[2] == 0
+    @test string(voff) == "BGZFStreams.VirtualOffset(0, 0)"
 
     voff += 1
     @test voff[1] == 0
@@ -17,6 +20,10 @@ using Compat
     voff = VirtualOffset(1234, 555)
     @test voff[1] == 1234
     @test voff[2] == 555
+    @test string(voff) == "BGZFStreams.VirtualOffset(1234, 555)"
+
+    @test_throws ArgumentError VirtualOffset(1 << 48, 0)
+    @test_throws ArgumentError VirtualOffset(0, 1 << 16)
 end
 
 @testset "BGZFStream" begin
