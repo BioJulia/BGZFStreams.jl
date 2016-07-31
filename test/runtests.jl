@@ -27,7 +27,7 @@ using Compat
 end
 
 @testset "BGZFStream" begin
-    filename = Pkg.dir("BGZFStreams", "test", "bar.bgz")
+    filename = joinpath(dirname(@__FILE__), "bar.bgz")
     stream = BGZFStream(filename, "r")
     @test read(stream, UInt8) === UInt8('b')
     @test read(stream, UInt8) === UInt8('a')
