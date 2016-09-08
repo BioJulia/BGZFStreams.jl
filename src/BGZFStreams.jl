@@ -3,6 +3,7 @@ module BGZFStreams
 export
     BGZFStream,
     VirtualOffset,
+    BGZFDataError,
     virtualoffset
 
 using Libz
