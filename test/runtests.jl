@@ -74,6 +74,14 @@ end
     @test isempty(read(stream))
     @test isempty(read(stream))
 
+    # invalid data
+    stream = BGZFStream(IOBuffer(vcat([0x1f, 0x00, 0x08, 0x04], rand(UInt8, 6))))
+    @test_throws BGZFDataError read(stream)  # invalid gzip flag
+    stream = BGZFStream(IOBuffer(vcat([0x1f, 0x8b, 0x00, 0x04], rand(UInt8, 6))))
+    @test_throws BGZFDataError read(stream)  # invalid compression method
+    stream = BGZFStream(IOBuffer(vcat([0x1f, 0x8b, 0x08, 0x01], rand(UInt8, 6))))
+    @test_throws BGZFDataError read(stream)  # invalid flag
+
     filename = tempname()
     try
         stream = BGZFStream(filename, "w")
