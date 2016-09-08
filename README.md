@@ -34,11 +34,12 @@ close(stream)
 
 ## Usage
 
-The BGZFStreams.jl package exports two types and a function to the package user:
+The BGZFStreams.jl package exports three types and a function to the package user:
 
 * Types:
     * `BGZFStream`: an `IO` stream of the BGZF file format
     * `VirtualOffset`: data offset in a BGZF file
+    * `BGZFDataError`: an error type thrown when reading a malformed byte stream
 * Function:
     * `virtualoffset(stream)`: returns the current virtual file offset of `stream`
 
@@ -52,6 +53,9 @@ the specification of the SAM file format. That is, the most significant 48-bit
 integer of a virtual offset is a byte offset to the BGZF file to the beginning
 position of a BGZF block and the least significant 16-bit integer is a byte
 offset to the uncompressed byte(s).
+
+The `BGZFDataError` type is a subtype of `Exception` and used to throw an
+exception when invalid data are read.
 
 The `virtualoffset(stream::BGZFStream)` returns the current virtual file offset.
 More specifically, it returns the virtual offset of the next reading byte while
