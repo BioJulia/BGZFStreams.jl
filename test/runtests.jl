@@ -103,6 +103,13 @@ end
         end
     end
 
+    # Pipe I/O
+    filename = joinpath(dirname(@__FILE__), "bar.bgz")
+    @test open(p -> read(BGZFStream(p)), `cat $(filename)`) == UInt8['b', 'a', 'r']
+    @test_throws ArgumentError open(p -> virtualoffset(BGZFStream(p)), `cat $(filename)`)
+    @test_throws ArgumentError open(p -> seek(BGZFStream(p), VirtualOffset(0, 0)), `cat $(filename)`)
+    # TODO: test writing to a pipe?
+
     buffer = IOBuffer()
     stream = BGZFStream(buffer, "w")
     write(stream, "foo")
