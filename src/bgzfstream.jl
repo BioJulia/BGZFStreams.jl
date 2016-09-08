@@ -39,7 +39,7 @@ type Block
     # space for the decompressed block
     decompressed_block::Vector{UInt8}
 
-    # block offset in a file
+    # block offset in a file (this is always 0 for a pipe stream)
     block_offset::Int
 
     # the next reading byte position in a block
@@ -160,6 +160,10 @@ function virtualoffset(stream::BGZFStream)
     return VirtualOffset(block.block_offset, block.position - 1)
 end
 
+function virtualoffset(stream::BGZFStream{Pipe})
+    throw(ArgumentError("virtualoffset is not supported for a pipe stream"))
+end
+
 function Base.show(io::IO, stream::BGZFStream)
     print(io,
         summary(stream),
@@ -220,6 +224,10 @@ function Base.seek(stream::BGZFStream, voffset::VirtualOffset)
     block.block_offset = block_offset
     block.position = inblock_offset + 1
     return
+end
+
+function Base.seek(stream::BGZFStream{Pipe}, voffset::VirtualOffset)
+    throw(ArgumentError("seek is not supported for a pipe stream"))
 end
 
 function Base.read(stream::BGZFStream, ::Type{UInt8})
@@ -344,7 +352,10 @@ function read_blocks!(stream)
     n_blocks = 0
     while n_blocks < length(stream.blocks) && !eof(stream.io)
         block = stream.blocks[n_blocks += 1]
-        block.block_offset = position(stream.io)
+        if !isa(stream.io, Pipe)
+            # Pipe does not support `position`.
+            block.block_offset = position(stream.io)
+        end
         block.position = 1
         bsize = read_bgzf_block!(stream.io, block.compressed_block)
         zstream = block.zstream
@@ -464,7 +475,9 @@ function write_blocks!(stream)
         if nb != blocksize
             error("failed to write a BGZF block")
         end
-        block.block_offset = position(stream.io)
+        if !isa(stream.io, Pipe)
+            block.block_offset = position(stream.io)
+        end
         block.position = 1
 
         reset_zstream(zstream, WRITE_MODE)
