@@ -10,25 +10,25 @@
 # block and then written to the output immediately.  Each data block is no
 # larger than 64 KiB before and after compression.
 #
-# Read mode (.mode = READ_MODE)
-# -----------------------------
+# Read mode (stream.mode = READ_MODE)
+# -----------------------------------
 #
 #          compressed block          decompressed block
-#          +---------------+         +---------------+
+# stream   +---------------+         +---------------+
 # .io ---> |xxxxxxx        | ------> |xxxxxxxxxxx    | --->
 #     read +---------------+ inflate +---------------+ read
-#                                    |------>| inblock_offset(.offset) ∈ [0, 64K)
-#                                    |<-------->| .size ∈ [0, 64K]
+#                                    |------>| block.position ∈ [0, 64K)
+#                                    |--------->| block.size ∈ [0, 64K]
 #
-# Write mode (.mode = WRITE_MODE)
-# -------------------------------
+# Write mode (stream.mode = WRITE_MODE)
+# -------------------------------------
 #
 #          compressed block          decompressed block
-#          +---------------+         +---------------+
+# stream   +---------------+         +---------------+
 # .io <--- |xxxxxxx        | <------ |xxxxxxxx       | <---
 #    write +---------------+ deflate +---------------+ write
-#                                    |------>| inblock_offset(.offset) ∈ [0, 64K)
-#                                    |<------------>| .size = 64K - 256
+#                                    |------>| block.position ∈ [0, 64K)
+#                                    |------------->| block.size = 64K - 256
 # - xxx: used data
 # - 64K: 65536 (= BGZF_MAX_BLOCK_SIZE = 64 * 1024)
 
@@ -40,7 +40,7 @@ type Block
     decompressed_block::Vector{UInt8}
 
     # block offset in a file
-    inblock_offset::Int
+    block_offset::Int
 
     # the next reading byte position in a block
     position::Int
@@ -109,7 +109,7 @@ const WRITE_MODE = 0x01
     BGZFStream(io::IO[, mode::AbstractString="r"])
     BGZFStream(filename::AbstractString[, mode::AbstractString="r"])
 
-Create an IO stream for the BGZF compression format.
+Create an I/O stream for the BGZF compression format.
 
 The first argument is either an `IO` object or a filename. If `mode` is `"r"`
 (read) the BGZF stream will be in read mode and decompress the underlying BGZF
@@ -157,7 +157,7 @@ function virtualoffset(stream::BGZFStream)
     else
         block = stream.blocks[1]
     end
-    return VirtualOffset(block.inblock_offset, block.position - 1)
+    return VirtualOffset(block.block_offset, block.position - 1)
 end
 
 function Base.show(io::IO, stream::BGZFStream)
@@ -210,14 +210,14 @@ function Base.seek(stream::BGZFStream, voffset::VirtualOffset)
     if stream.mode == WRITE_MODE
         throw(ArgumentError("BGZFStream in write mode is not seekable"))
     end
-    file_offset, inblock_offset = offsets(voffset)
-    seek(stream.io, file_offset)
+    block_offset, inblock_offset = offsets(voffset)
+    seek(stream.io, block_offset)
     read_blocks!(stream)
     block = first(stream.blocks)
     if inblock_offset ≥ block.size
         throw(ArgumentError("too large in-block offset"))
     end
-    block.inblock_offset = file_offset
+    block.block_offset = block_offset
     block.position = inblock_offset + 1
     return
 end
@@ -344,7 +344,7 @@ function read_blocks!(stream)
     n_blocks = 0
     while n_blocks < length(stream.blocks) && !eof(stream.io)
         block = stream.blocks[n_blocks += 1]
-        block.inblock_offset = position(stream.io)
+        block.block_offset = position(stream.io)
         block.position = 1
         bsize = read_bgzf_block!(stream.io, block.compressed_block)
         zstream = block.zstream
@@ -464,7 +464,7 @@ function write_blocks!(stream)
         if nb != blocksize
             error("failed to write a BGZF block")
         end
-        block.inblock_offset = position(stream.io)
+        block.block_offset = position(stream.io)
         block.position = 1
 
         reset_zstream(zstream, WRITE_MODE)
