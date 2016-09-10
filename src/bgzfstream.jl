@@ -273,7 +273,7 @@ function Base.unsafe_read(stream::BGZFStream, p::Ptr{UInt8}, n::UInt)
         if i == 0
             throw(EOFError())
         end
-        block = stream.blocks[i]
+        @inbounds block = stream.blocks[i]
         len = min(p_end - p, block.size - block.position + 1)
         src = pointer(block.decompressed_block, block.position)
         memcpy(p, src, len)
@@ -313,7 +313,7 @@ end
     #@assert stream.mode == READ_MODE
     @label doit
     while stream.block_index ≤ endof(stream.blocks)
-        block = stream.blocks[stream.block_index]
+        @inbounds block = stream.blocks[stream.block_index]
         if block.position ≤ block.size
             return stream.block_index
         end
