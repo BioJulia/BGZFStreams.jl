@@ -6,8 +6,7 @@ export
     BGZFDataError,
     virtualoffset
 
-using Libz
-using Base.Threads
+import Libz
 
 include("virtualoffset.jl")
 include("bgzfstream.jl")
