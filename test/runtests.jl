@@ -45,19 +45,19 @@ end
     close(stream)
     @test_throws ArgumentError unsafe_read(stream, pointer(data), 3)
 
-    stream = BGZFStream(filename, "r")
-    @test virtualoffset(stream) === VirtualOffset(0, 0)
-    read(stream, UInt8)
-    read(stream, UInt8)
-    @test virtualoffset(stream) === VirtualOffset(0, 2)
-    seek(stream, VirtualOffset(0, 1))
-    @test read(stream, UInt8) === UInt8('a')
-    @test read(stream, UInt8) === UInt8('r')
-    seekstart(stream)
-    @test read(stream, UInt8) === UInt8('b')
-    @test read(stream, UInt8) === UInt8('a')
-    @test read(stream, UInt8) === UInt8('r')
-    close(stream)
+    BGZFStream(filename, "r") do stream
+        @test virtualoffset(stream) === VirtualOffset(0, 0)
+        read(stream, UInt8)
+        read(stream, UInt8)
+        @test virtualoffset(stream) === VirtualOffset(0, 2)
+        seek(stream, VirtualOffset(0, 1))
+        @test read(stream, UInt8) === UInt8('a')
+        @test read(stream, UInt8) === UInt8('r')
+        seekstart(stream)
+        @test read(stream, UInt8) === UInt8('b')
+        @test read(stream, UInt8) === UInt8('a')
+       @test read(stream, UInt8) === UInt8('r')
+    end
 
     # Empty data.
     empty_block = copy(BGZFStreams.EOF_BLOCK)

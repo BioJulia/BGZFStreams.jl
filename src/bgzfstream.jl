@@ -142,6 +142,20 @@ function BGZFStream(filename::AbstractString, mode::AbstractString="r")
 end
 
 """
+    BGZFStream(f::Function, args....) 
+    Apply the function `f` to the result of `BGZFStream(args...)` and close stream on completion
+"""
+function BGZFStream(f::Function, args...)
+    stream = BGZFStream(args...)
+    try
+        f(stream)
+    finally
+        close(stream)
+    end
+end
+
+
+"""
     virtualoffset(stream::BGZFStream)
 
 Return the current virtual file offset of `stream`.
