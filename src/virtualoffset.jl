@@ -1,7 +1,7 @@
 # Virtual Offset
 # ==============
 
-bitstype 64 VirtualOffset
+@compat primitive type VirtualOffset 64 end
 
 function Base.convert(::Type{VirtualOffset}, x::UInt64)
     return reinterpret(VirtualOffset, x)
