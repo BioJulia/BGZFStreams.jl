@@ -8,6 +8,7 @@ export
     BGZFDataError,
     virtualoffset
 
+import Compat: @compat
 import Libz
 
 include("virtualoffset.jl")
