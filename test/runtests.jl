@@ -22,6 +22,13 @@ using Compat
     @test voff[2] == 555
     @test string(voff) == "BGZFStreams.VirtualOffset(1234, 555)"
 
+    voff = VirtualOffset(1234, 555)
+    buf = IOBuffer()
+    @test write(buf, voff) == sizeof(UInt64)
+    seekstart(buf)
+    @test read(buf, VirtualOffset) === voff
+    @test eof(buf)
+
     @test_throws ArgumentError VirtualOffset(1 << 48, 0)
     @test_throws ArgumentError VirtualOffset(0, 1 << 16)
 end

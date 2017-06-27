@@ -53,3 +53,11 @@ function Base.show(io::IO, voffset::VirtualOffset)
     block_offset, inblock_offset = offsets(voffset)
     print(io, summary(voffset), "(", block_offset, ", ", inblock_offset, ")")
 end
+
+function Base.read(io::IO, ::Type{VirtualOffset})
+    return convert(VirtualOffset, read(io, UInt64))
+end
+
+function Base.write(io::IO, voffset::VirtualOffset)
+    return write(io, convert(UInt64, voffset))
+end
