@@ -350,10 +350,15 @@ function read_blocks!(stream)
 
     # read BGZF blocks in sequence
     n_blocks = 0
+    has_position = true
+    try
+        position(stream.io)
+    catch
+        has_position = false
+    end
     while n_blocks < length(stream.blocks) && !eof(stream.io)
         block = stream.blocks[n_blocks += 1]
-        if !isa(stream.io, Pipe)
-            # Pipe does not support `position`.
+        if has_position
             block.block_offset = position(stream.io)
         end
         block.position = 1
