@@ -4,13 +4,12 @@ os:
   - linux
   - osx
 julia:
-  - 0.5
   - 0.6
+  - nightly
+matrix:
+  allow_failures:
+    - julia: nightly
 notifications:
   email: false
 after_success:
   - julia -e 'cd(Pkg.dir("BGZFStreams")); Pkg.add("Coverage"); using Coverage; Codecov.submit(process_folder())'
-# uncomment the following lines to override the default test script
-#script:
-#  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
-#  - julia -e 'Pkg.clone(pwd()); Pkg.build("BGZFStreams"); Pkg.test("BGZFStreams"; coverage=true)'
