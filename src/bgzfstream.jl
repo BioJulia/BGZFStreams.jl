@@ -32,7 +32,7 @@
 # - xxx: used data
 # - 64K: 65536 (= BGZF_MAX_BLOCK_SIZE = 64 * 1024)
 
-type Block
+mutable struct Block
     # space for the compressed block
     compressed_block::Vector{UInt8}
 
@@ -72,7 +72,7 @@ function Block(mode)
 end
 
 # Stream type for the BGZF compression format.
-type BGZFStream{T<:IO} <: IO
+mutable struct BGZFStream{T<:IO} <: IO
     # underlying IO stream
     io::T
 
@@ -339,7 +339,7 @@ function memcpy(dst, src, len)
         dst, src, len)
 end
 
-immutable BGZFDataError <: Exception
+struct BGZFDataError <: Exception
     message::AbstractString
 end
 
