@@ -6,10 +6,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
-## [0.1.5] - 2018-06-22
+## [0.2.0] - 2018-06-22
+### Added
+- Support for do-block syntax with BGZFStreams. Thanks @cth :smile:.
+
 ### Changed
-- Added up to date project files.
-- Fix support for STDIN pipes. Thanks @dcjones :smile:
+- Up to date project files.
+- Fix support for STDIN pipes. Thanks @dcjones :smile:.
 
 ### Dependencies
 - :exclamation: Dropped support for julia v0.5.

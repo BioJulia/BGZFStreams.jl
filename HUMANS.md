@@ -15,6 +15,8 @@
   - GitHub: [tkelman](https://github.com/tkelman)
 - Elliot Saba
   - GitHub: [staticfloat](https://github.com/staticfloat)
+- Christian Theil Have
+  - GitHub: [cth](https://github.com/cth)
 
 [Full contributors list](https://github.com/BioJulia/BioAlignments.jl/graphs/contributors)
 

@@ -134,11 +134,15 @@ function BGZFStream(io::IO, mode::AbstractString="r")
     return BGZFStream(io, mode′, blocks, 1, true, io -> close(io))
 end
 
-function BGZFStream(filename::AbstractString, mode::AbstractString="r")
+function BGZFStream(filename::AbstractString, mode::AbstractString = "r")
     if mode ∉ ("r", "w", "a")
         throw(ArgumentError("invalid mode: '", mode, "'"))
     end
     return BGZFStream(open(filename, mode), mode)
+end
+
+function Base.open(::Type{BGZFStream}, filepath::AbstractString, mode::AbstractString = "r")
+    return BGZFStream(filepath, mode)
 end
 
 """
