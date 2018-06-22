@@ -45,7 +45,7 @@ end
     close(stream)
     @test_throws ArgumentError unsafe_read(stream, pointer(data), 3)
 
-    BGZFStream(filename, "r") do stream
+    open(BGZFStream, filename, "r") do stream
         @test virtualoffset(stream) === VirtualOffset(0, 0)
         read(stream, UInt8)
         read(stream, UInt8)

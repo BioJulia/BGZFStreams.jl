@@ -134,26 +134,16 @@ function BGZFStream(io::IO, mode::AbstractString="r")
     return BGZFStream(io, mode′, blocks, 1, true, io -> close(io))
 end
 
-function BGZFStream(filename::AbstractString, mode::AbstractString="r")
+function BGZFStream(filename::AbstractString, mode::AbstractString = "r")
     if mode ∉ ("r", "w", "a")
         throw(ArgumentError("invalid mode: '", mode, "'"))
     end
     return BGZFStream(open(filename, mode), mode)
 end
 
-"""
-    BGZFStream(f::Function, args....) 
-    Apply the function `f` to the result of `BGZFStream(args...)` and close stream on completion
-"""
-function BGZFStream(f::Function, args...)
-    stream = BGZFStream(args...)
-    try
-        f(stream)
-    finally
-        close(stream)
-    end
+function Base.open(::Type{BGZFStream}, filepath::AbstractString, mode::AbstractString = "r")
+    return BGZFStream(filepath, mode)
 end
-
 
 """
     virtualoffset(stream::BGZFStream)
