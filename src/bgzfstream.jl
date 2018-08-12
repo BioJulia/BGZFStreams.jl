@@ -334,8 +334,8 @@ end
 function memcpy(dst, src, len)
     ccall(
         :memcpy,
-        Ptr{Void},
-        (Ptr{Void}, Ptr{Void}, Csize_t),
+        Ptr{Cvoid},
+        (Ptr{Cvoid}, Ptr{Cvoid}, Csize_t),
         dst, src, len)
 end
 
