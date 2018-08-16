@@ -53,8 +53,8 @@ mutable struct Block
 end
 
 function Block(mode)
-    compressed_block = Vector{UInt8}(BGZF_MAX_BLOCK_SIZE)
-    decompressed_block = Vector{UInt8}(BGZF_MAX_BLOCK_SIZE)
+    compressed_block = Vector{UInt8}(undef, BGZF_MAX_BLOCK_SIZE)
+    decompressed_block = Vector{UInt8}(undef, BGZF_MAX_BLOCK_SIZE)
 
     if mode == READ_MODE
         zstream = Libz.init_inflate_zstream(true)
@@ -316,7 +316,7 @@ end
 @inline function ensure_buffered_data(stream)
     #@assert stream.mode == READ_MODE
     @label doit
-    while stream.block_index ≤ endof(stream.blocks)
+    while stream.block_index ≤ lastindex(stream.blocks)
         @inbounds block = stream.blocks[stream.block_index]
         if block.position ≤ block.size
             return stream.block_index
@@ -334,8 +334,8 @@ end
 function memcpy(dst, src, len)
     ccall(
         :memcpy,
-        Ptr{Void},
-        (Ptr{Void}, Ptr{Void}, Csize_t),
+        Ptr{Nothing},
+        (Ptr{Nothing}, Ptr{Nothing}, Csize_t),
         dst, src, len)
 end
 
@@ -375,7 +375,7 @@ function read_blocks!(stream)
     end
 
     # inflate blocks in parallel
-    rets = Vector{Cint}(n_blocks)
+    rets = Vector{Cint}(undef, n_blocks)
     Threads.@threads for i in 1:n_blocks
         block = stream.blocks[i]
         zstream = block.zstream
@@ -494,12 +494,18 @@ function write_blocks!(stream)
 end
 
 function fix_header!(block, blocksize)
-    copy!(block,
-          # ID1   ID2    CM   FLG  |<--     MTIME    -->|   XFL    OS
-          [0x1f, 0x8b, 0x08, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff])
-    copy!(block, 11,
-          #  XLEN    S1    S2    SLEN          BSIZE
-          reinterpret(UInt8, [0x0006, 0x4342, 0x0002, UInt16(blocksize - 1)]))
+
+    #        ID1   ID2    CM   FLG  |<--     MTIME    -->|   XFL    OS
+    blob = [0x1f, 0x8b, 0x08, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff]
+    block[1:lastindex(blob)] = blob
+
+    #                          XLEN    S1    S2    SLEN          BSIZE
+    blob = reinterpret(UInt8, [0x0006, 0x4342, 0x0002, UInt16(blocksize - 1)])
+    offset = 11
+
+    block[offset:lastindex(blob)+offset-1] = blob
+
+    #TODO: check return.
 end
 
 # end-of-file marker block (used for detecting unintended file truncation)
@@ -515,7 +521,7 @@ function is_eof_block(block)
     if length(block) < length(EOF_BLOCK)
         return false
     end
-    for i in 1:endof(EOF_BLOCK)
+    for i in 1:lastindex(EOF_BLOCK)
         if block[i] != EOF_BLOCK[i]
             return false
         end

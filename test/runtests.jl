@@ -1,5 +1,9 @@
 using BGZFStreams
-using Base.Test
+@static if VERSION < v"0.7.0-DEV.2005"
+    using Base.Test
+else
+    using Test
+end
 using Compat
 
 @testset "VirtualOffset" begin
@@ -11,7 +15,7 @@ using Compat
     @test voff <= VirtualOffset(1, 0)
     @test voff[1] == 0
     @test voff[2] == 0
-    @test string(voff) == "BGZFStreams.VirtualOffset(0, 0)"
+    @test string(voff) == "VirtualOffset(0, 0)"
 
     voff += 1
     @test voff[1] == 0
@@ -20,7 +24,7 @@ using Compat
     voff = VirtualOffset(1234, 555)
     @test voff[1] == 1234
     @test voff[2] == 555
-    @test string(voff) == "BGZFStreams.VirtualOffset(1234, 555)"
+    @test string(voff) == "VirtualOffset(1234, 555)"
 
     voff = VirtualOffset(1234, 555)
     buf = IOBuffer()
@@ -42,7 +46,7 @@ end
     @test eof(stream)
     @test flush(stream) === nothing
     @test close(stream) === nothing
-    @test string(stream) == "BGZFStreams.BGZFStream{IOStream}(<mode=read>)"
+    @test string(stream) == "BGZFStream{IOStream}(<mode=read>)"
     @test_throws ArgumentError read(stream, UInt8)
 
     stream = BGZFStream(filename, "r")
@@ -101,7 +105,7 @@ end
         @test eof(stream)
         @test flush(stream) === nothing
         @test close(stream) === nothing
-        @test string(stream) == "BGZFStreams.BGZFStream{IOStream}(<mode=write>)"
+        @test string(stream) == "BGZFStream{IOStream}(<mode=write>)"
     catch
         rethrow()
     finally
