@@ -53,8 +53,8 @@ mutable struct Block
 end
 
 function Block(mode)
-    compressed_block = Vector{UInt8}(BGZF_MAX_BLOCK_SIZE)
-    decompressed_block = Vector{UInt8}(BGZF_MAX_BLOCK_SIZE)
+    compressed_block = Vector{UInt8}(undef, BGZF_MAX_BLOCK_SIZE)
+    decompressed_block = Vector{UInt8}(undef, BGZF_MAX_BLOCK_SIZE)
 
     if mode == READ_MODE
         zstream = Libz.init_inflate_zstream(true)
@@ -375,7 +375,7 @@ function read_blocks!(stream)
     end
 
     # inflate blocks in parallel
-    rets = Vector{Cint}(n_blocks)
+    rets = Vector{Cint}(undef, n_blocks)
     Threads.@threads for i in 1:n_blocks
         block = stream.blocks[i]
         zstream = block.zstream
