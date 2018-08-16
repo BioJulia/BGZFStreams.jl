@@ -316,7 +316,7 @@ end
 @inline function ensure_buffered_data(stream)
     #@assert stream.mode == READ_MODE
     @label doit
-    while stream.block_index ≤ endof(stream.blocks)
+    while stream.block_index ≤ lastindex(stream.blocks)
         @inbounds block = stream.blocks[stream.block_index]
         if block.position ≤ block.size
             return stream.block_index
@@ -515,7 +515,7 @@ function is_eof_block(block)
     if length(block) < length(EOF_BLOCK)
         return false
     end
-    for i in 1:endof(EOF_BLOCK)
+    for i in 1:lastindex(EOF_BLOCK)
         if block[i] != EOF_BLOCK[i]
             return false
         end
