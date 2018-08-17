@@ -1,6 +1,5 @@
 using BGZFStreams
 using Test
-using Compat
 
 @testset "VirtualOffset" begin
     voff = VirtualOffset(0, 0)
