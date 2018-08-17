@@ -49,22 +49,21 @@ mutable struct Block
     size::Int
 
     # zstream object
-    zstream::Libz.ZStream
+    zstream::CodecZlib.ZStream
 end
 
 function Block(mode)
     compressed_block = Vector{UInt8}(undef, BGZF_MAX_BLOCK_SIZE)
     decompressed_block = Vector{UInt8}(undef, BGZF_MAX_BLOCK_SIZE)
 
+    zstream = CodecZlib.ZStream()
     if mode == READ_MODE
-        zstream = Libz.init_inflate_zstream(true)
+        windowbits = 32 + 15
+        CodecZlib.inflate_init!(zstream, windowbits)
         size = 0
     else
-        zstream = Libz.init_deflate_zstream(
-            true,
-            Libz.Z_DEFAULT_COMPRESSION,
-            8,  # default memory level
-            Libz.Z_DEFAULT_STRATEGY)
+        windowbits = 16 + 15
+        CodecZlib.deflate_init!(zstream, CodecZlib.Z_DEFAULT_COMPRESSION, windowbits)
         size = BGZF_SAFE_BLOCK_SIZE
     end
 
@@ -380,12 +379,12 @@ function read_blocks!(stream)
         block = stream.blocks[i]
         zstream = block.zstream
         old_avail_out = zstream.avail_out
-        rets[i] = Libz.inflate!(zstream, Libz.Z_FINISH)
+        rets[i] = CodecZlib.inflate!(zstream, CodecZlib.Z_FINISH)
         block.size = old_avail_out - zstream.avail_out
     end
 
     for i in 1:n_blocks
-        if rets[i] != Libz.Z_STREAM_END
+        if rets[i] != CodecZlib.Z_STREAM_END
             error("zlib failed to inflate a compressed block")
         end
         block = stream.blocks[i]
@@ -469,9 +468,9 @@ function write_blocks!(stream)
         zstream.next_out = pointer(block.compressed_block, 9)
         zstream.avail_out = BGZF_MAX_BLOCK_SIZE - 8
 
-        ret = Libz.deflate!(zstream, Libz.Z_FINISH)
-        if ret != Libz.Z_STREAM_END
-            if ret == Libz.Z_OK
+        ret = CodecZlib.deflate!(zstream, CodecZlib.Z_FINISH)
+        if ret != CodecZlib.Z_STREAM_END
+            if ret == CodecZlib.Z_OK
                 error("block size may exceed BGZF_MAX_BLOCK_SIZE")
             else
                 error("failed to compress a BGZF block (zlib error $(ret))")
@@ -526,9 +525,9 @@ end
 # Reset the zstream.
 function reset_zstream(zstream, mode)
     if mode == READ_MODE
-        Libz.@zcheck Libz.reset_inflate!(zstream)
+        @assert CodecZlib.inflate_reset!(zstream) == CodecZlib.Z_OK
     else
-        Libz.@zcheck Libz.reset_deflate!(zstream)
+        @assert CodecZlib.deflate_reset!(zstream) == CodecZlib.Z_OK
     end
     return
 end
@@ -536,9 +535,9 @@ end
 # End the zstream.
 function end_zstream(zstream, mode)
     if mode == READ_MODE
-        Libz.@zcheck Libz.end_inflate!(zstream)
+        @assert CodecZlib.inflate_end!(zstream) == CodecZlib.Z_OK
     else
-        Libz.@zcheck Libz.end_deflate!(zstream)
+        @assert CodecZlib.deflate_end!(zstream) == CodecZlib.Z_OK
     end
     return
 end
