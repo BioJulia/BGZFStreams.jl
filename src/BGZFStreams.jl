@@ -1,5 +1,3 @@
-__precompile__()
-
 module BGZFStreams
 
 export
@@ -8,7 +6,6 @@ export
     BGZFDataError,
     virtualoffset
 
-import Compat: @compat
 import Libz
 
 include("virtualoffset.jl")
