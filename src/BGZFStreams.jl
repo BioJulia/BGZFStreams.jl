@@ -6,7 +6,7 @@ export
     BGZFDataError,
     virtualoffset
 
-import Libz
+import CodecZlib
 
 include("virtualoffset.jl")
 include("bgzfstream.jl")
