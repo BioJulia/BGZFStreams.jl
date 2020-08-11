@@ -1,0 +1,7 @@
+name = "BGZFStreams"
+uuid = "4d7755b7-c47f-421c-b136-73e648a3459c"
+authors = ["Kenta Sato"]
+version = "0.4.0"
+
+[deps]
+LibDeflate = "9255714d-24a7-4b30-8ea3-d46a97f7e13b"

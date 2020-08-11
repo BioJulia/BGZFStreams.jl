@@ -1,0 +1,12 @@
+# This file is machine-generated - editing it directly is not advised
+
+[[LibDeflate]]
+deps = ["Libdl"]
+git-tree-sha1 = "f67177a659a6715d2377680573d2d3d545755f0f"
+repo-rev = "master"
+repo-url = "/home/jakob/code/LibDeflate.jl"
+uuid = "9255714d-24a7-4b30-8ea3-d46a97f7e13b"
+version = "0.1.0"
+
+[[Libdl]]
+uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
