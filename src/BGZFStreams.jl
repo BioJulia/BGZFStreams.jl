@@ -7,7 +7,6 @@ export
     virtualoffset
 
 using LibDeflate
-import Base.Threads: @spawn
 
 # BGZF blocks are no larger than 64 KiB before and after compression.
 const BGZF_MAX_BLOCK_SIZE = UInt(64 * 1024)
@@ -85,7 +84,12 @@ Base.:+(voffset::VirtualOffset, x::Integer) = VirtualOffset(voffset.x + UInt64(x
 Base.getindex(voffset::VirtualOffset, i::Integer) = offsets(voffset)[i]
 
 offsets(x::VirtualOffset) = (x.x >>> 16, x.x & 0xffff)
-Base.show(io::IO, x::VirtualOffset) = print(io, summary(x), offsets(x))
+
+function Base.show(io::IO, x::VirtualOffset)
+    v, o = offsets(x)
+    print(io, summary(x), '(', v, ", ", o, ')')
+end
+
 Base.read(io::IO, ::Type{VirtualOffset}) = VirtualOffset(read(io, UInt64))
 Base.write(io::IO, voffset::VirtualOffset) = write(io, voffset.x)
 
@@ -262,7 +266,6 @@ mutable struct BGZFStream{T<:IO} <: IO
 
     # compressed & decompressed blocks
     blocks::Vector{Block}
-    tasks::Vector{Task}
     crcs::Vector{UInt32}
 
     # current block index
@@ -297,9 +300,8 @@ function BGZFStream(io::IO, mode::AbstractString="r")
     mode_ = mode == "r" ? READ_MODE : WRITE_MODE
     N = Threads.nthreads()
     blocks = [Block(mode_) for i in 1:N]
-    tasks = Vector{Task}(undef, N)
     crcs = Vector{UInt32}(undef, N)
-    return BGZFStream(io, mode_, blocks, tasks, crcs, 1, true, io -> close(io))
+    return BGZFStream(io, mode_, blocks, crcs, 1, true, io -> close(io))
 end
 
 function BGZFStream(filename::AbstractString, mode::AbstractString = "r")
@@ -430,11 +432,8 @@ function read_blocks!(stream::BGZFStream)
             N += 1
         end
     end
-    for i in 1:N
-        stream.tasks[i] = @spawn decompress!(stream.blocks[i], stream.crcs[i])
-    end
-    for i in 1:N
-        wait(stream.tasks[i])
+    Threads.@threads for i in 1:N
+        decompress!(stream.blocks[i], stream.crcs[i])
     end
 end
 
@@ -480,11 +479,8 @@ end
 
 "Write the first N blocks to stream's IO"
 function write_blocks!(stream::BGZFStream, N::Int)
-    for i in 1:N
-        stream.tasks[i] = @spawn compress!(stream.blocks[i])
-    end
-    for i in 1:N
-        wait(stream.tasks[i])
+    Threads.@threads for i in 1:N
+        compress!(stream.blocks[i])
     end
     for i in 1:N
         write_compressed_block(stream.io, stream.blocks[i])
