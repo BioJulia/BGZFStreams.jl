@@ -5,3 +5,5 @@ version = "0.4.0"
 
 [deps]
 LibDeflate = "9255714d-24a7-4b30-8ea3-d46a97f7e13b"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
+TranscodingStreams = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
