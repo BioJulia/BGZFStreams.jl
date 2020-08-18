@@ -3,7 +3,8 @@ module BGZFStreams
 export
     BGZFCompressorStream,
     BGZFDecompressorStream,
-    BGZFError
+    BGZFError,
+    VirtualOffset
 
 using LibDeflate
 using TranscodingStreams
@@ -21,6 +22,7 @@ end
 
 @noinline bgzferror(s::String) = throw(BGZFError(s))
 
+include("virtualoffset.jl")
 include("block.jl")
 include("bgzfstream.jl")
 
