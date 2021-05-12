@@ -153,7 +153,7 @@ function virtualoffset(stream::BGZFStream)
     if stream.mode == READ_MODE
         i = ensure_buffered_data(stream)
         if i == 0
-            block = stream.blocks[stream.block_index]
+            block = stream.blocks[end]
         else
             block = stream.blocks[i]
         end
