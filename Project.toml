@@ -1,0 +1,17 @@
+name = "BGZFStreams"
+uuid = "28d598bf-9b8f-59f1-b38c-5a06b4a0f5e6"
+authors = ["Ben J. Ward <ben.ward@earlham.ac.uk>", "Kenta Sato <bicycle1885@gmail.com>", "Daniel C. Jones <dcjones@cs.washington.edu>", "Tony Kelman <tony@kelman.net>", "Elliot Saba <staticfloat@gmail.com>", "Christian Theil Have"]
+version = "0.3.1"
+
+[deps]
+CodecZlib = "944b1d66-785c-5afd-91f1-9de20f533193"
+
+[compat]
+CodecZlib = "0.5, 0.6, 0.7"
+julia = "0.7, 1"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
