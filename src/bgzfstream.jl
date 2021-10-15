@@ -317,6 +317,9 @@ end
     @label doit
     while stream.block_index ≤ lastindex(stream.blocks)
         @inbounds block = stream.blocks[stream.block_index]
+        if is_eof_block(block.compressed_block) # Note: `read_blocks!` does not necessarily fill/overwrite blocks till `lastindex(stream.blocks)`, we need to stop incrementing `stream.block_index` when an eof block is encountered.
+            break
+        end
         if block.position ≤ block.size
             return stream.block_index
         end
