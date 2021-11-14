@@ -1,6 +1,8 @@
 using BGZFStreams
 using Test
 
+@info "Environment" Threads.nthreads()
+
 @testset "VirtualOffset" begin
     voff = VirtualOffset(0, 0)
     @test voff == VirtualOffset(0, 0)
