@@ -157,4 +157,54 @@ end
         @test data == data′
         close(stream)
     end
+
+
+    n = Threads.nthreads()
+
+
+    # Setup buffer for writing.
+    buffer = IOBuffer()
+    stream = BGZFStream(buffer, "w")
+    stream.onclose = io -> nothing # HACK: do not close the buffer after the stream is closed
+
+
+    @test stream.blocks |> length  == 1 # Note: only one block when writing,
+    @test stream.blocks[1].size == BGZFStreams.BGZF_SAFE_BLOCK_SIZE
+
+    # Generate n blocks of data.
+    data = rand(0x00:0xf0, (n*BGZFStreams.BGZF_SAFE_BLOCK_SIZE) )
+
+    write_offsets = BGZFStreams.VirtualOffset[]
+
+    # Write and record virtual offset.
+    for d in data
+    	write(stream, d)
+    	push!(write_offsets, virtualoffset(stream))
+    end
+    close(stream) # Note: closing the stream will write the EOF_BLOCK.
+    last_write_offset = virtualoffset(stream)
+
+
+    # Setup buffer for reading.
+    seekstart(buffer)
+    stream = BGZFStream(buffer)
+
+    @test stream.blocks |> length  == n # Note: same number of blocks as threads when reading,
+
+    read_offsets = BGZFStreams.VirtualOffset[]
+    data_read = typeof(data)()
+
+    # Read and record virtual offset.
+    while !eof(stream)
+    	push!(data_read, read(stream, UInt8))
+    	push!(read_offsets, virtualoffset(stream))
+    end
+    close(stream)
+    last_read_offset = virtualoffset(stream)
+
+    @test data == data_read
+    @test write_offsets == read_offsets
+
+    @test last_write_offset == last_read_offset == write_offsets[end]
+
 end
