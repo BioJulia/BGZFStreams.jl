@@ -2,6 +2,8 @@
 
 [![Unit Tests](https://github.com/BioJulia/BGZFStreams.jl/actions/workflows/UnitTests.yml/badge.svg?branch=master)](https://github.com/BioJulia/BGZFStreams.jl/actions/workflows/UnitTests.yml)
 [![codecov.io](http://codecov.io/github/BioJulia/BGZFStreams.jl/coverage.svg?branch=master)](http://codecov.io/github/BioJulia/BGZFStreams.jl?branch=master)
+[![Downstream](https://github.com/BioJulia/BGZFStreams.jl/actions/workflows/Downstream.yml/badge.svg)](https://github.com/BioJulia/BGZFStreams.jl/actions/workflows/Downstream.yml)
+
 
 BGZF is a compression format that supports random access using *virtual file offsets*.
 
