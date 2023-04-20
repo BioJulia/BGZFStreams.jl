@@ -84,11 +84,18 @@ mutable struct BGZFStream{T<:IO} <: IO
     # current block index
     block_index::Int
 
+    # index of the last block loaded
+    last_block_index::Int
+
     # whether stream is open
     isopen::Bool
 
     # callback function called when closing the stream
     onclose::Function
+end
+
+function BGZFStream(io, mode, blocks, block_index, isopen, onclose) # This method maintains compatibility after the inclusion of the `last_block_index` field to `BGZFStream`.
+    return BGZFStream(io, mode, blocks, block_index, 0, isopen, onclose)
 end
 
 # BGZF blocks are no larger than 64 KiB before and after compression.
@@ -315,15 +322,18 @@ end
 @inline function ensure_buffered_data(stream)
     #@assert stream.mode == READ_MODE
     @label doit
-    while stream.block_index ≤ lastindex(stream.blocks)
+    while stream.block_index < stream.last_block_index
         @inbounds block = stream.blocks[stream.block_index]
-        if is_eof_block(block.compressed_block) # Note: `read_blocks!` does not necessarily fill/overwrite blocks till `lastindex(stream.blocks)`, we need to stop incrementing `stream.block_index` when an eof block is encountered.
-            break
-        end
         if block.position ≤ block.size
             return stream.block_index
         end
         stream.block_index += 1
+    end
+    if stream.block_index == stream.last_block_index
+        @inbounds block = stream.blocks[stream.block_index]
+        if block.position ≤ block.size
+            return stream.block_index
+        end
     end
     if !eof(stream.io)
         read_blocks!(stream)
@@ -364,6 +374,7 @@ function read_blocks!(stream)
     end
     while n_blocks < length(stream.blocks) && !eof(stream.io)
         block = stream.blocks[n_blocks += 1]
+        stream.last_block_index = n_blocks
         if has_position
             block.block_offset = position(stream.io)
         end
