@@ -1,6 +1,8 @@
 using BGZFStreams
 using Test
 
+@info "Environment" Threads.nthreads()
+
 @testset "VirtualOffset" begin
     voff = VirtualOffset(0, 0)
     @test voff == VirtualOffset(0, 0)
@@ -171,8 +173,8 @@ end
     @test stream.blocks |> length  == 1 # Note: only one block when writing,
     @test stream.blocks[1].size == BGZFStreams.BGZF_SAFE_BLOCK_SIZE
 
-    # Generate n blocks of data.
-    data = rand(0x00:0xf0, (n*BGZFStreams.BGZF_SAFE_BLOCK_SIZE) )
+    # Generate n+1 blocks of data.
+    data = rand(0x00:0xf0, ((n+1)*BGZFStreams.BGZF_SAFE_BLOCK_SIZE) )
 
     write_offsets = BGZFStreams.VirtualOffset[]
 
